@@ -1,0 +1,4 @@
+#!/bin/bash
+#SOFTHSM2_CONF=/devel/00mirror-cvs/00-m32/endesive/examples/softhsm2.conf && \
+SOFTHSM2_CONF=softhsm2.conf
+softhsm2-util $*

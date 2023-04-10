@@ -1,0 +1,27 @@
+#!/bin/bash
+export OPENSC_DEBUG=9
+export PYKCS11LIB=/devel/lib/pkcs11libs/libcrypto3PKCS.so
+#export PYKCS11LIB=/devel/lib/pkcs11libs/libcryptoCertum3PKCS.so
+#export PYKCS11LIB=/opt/SimplySignDesktop/SimplySignPKCS_64-MS-1.0.20.so
+line="pkcs11-tool --module $PYKCS11LIB"
+#
+#--token-label=test \
+#--login \
+#--pin=1234 \
+#$*
+line="$line $*"
+echo $line
+$line
+
+# gen rsa key with id=02
+#--login --login-type so --keypairgen --id 2 --key-type rsa:2048
+
+#--sign --id 2 -i data.txt -o data.sig
+#openssl rsautl -verify -in data.sig -inkey 9e_pubkey.pem -pubin
+
+#--sign -m RSA-SHA256 --id 2 -i data.txt -o data.sig
+#openssl dgst -sha256 -verify 9c_pubkey.pem -signature data.sig data.txt
+
+#--sign --id 01 --mechanism RSA-PKCS --login --input-file data --output-file data.sig
+
+#--read-object --id 01 --type cert --output-file cert.der

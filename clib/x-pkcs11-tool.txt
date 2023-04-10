@@ -1,0 +1,191 @@
+       pkcs11-tool [OPTIONS]
+
+DESCRIPTION
+       The pkcs11-tool utility is used to manage the data objects on smart cards and similar PKCS
+       #11 security tokens. Users can list and read PINs, keys and certificates stored on the
+       token. User PIN authentication is performed for those operations that require it.
+
+OPTIONS
+       --attr-from path
+           Extract information from path (DER-encoded certificate file) and create the
+           corresponding attributes when writing an object to the token. Example: the certificate
+           subject name is used to create the CKA_SUBJECT attribute.
+
+       --change-pin, -c
+           Change the user PIN on the token
+
+       --unlock-pin
+           Unlock User PIN (without --login unlock in logged in session; otherwise --login-type
+           has to be 'context-specific').
+
+       --hash, -h
+           Hash some data.
+
+       --id id, -d id
+           Specify the id of the object to operate on.
+
+       --init-pin
+           Initializes the user PIN. This option differs from --change-pin in that it sets the
+           user PIN for the first time. Once set, the user PIN can be changed using --change-pin.
+
+       --init-token
+           Initialize a token: set the token label as well as a Security Officer PIN (the label
+           must be specified using --label).
+
+       --input-file path, -i path
+           Specify the path to a file for input.
+
+       --keypairgen, -k
+           Generate a new key pair (public and private pair.)
+
+       --key-type <replacement>specification</replacement>
+           Specify the type and length of the key to create, for example rsa:1024 or
+           EC:prime256v1.
+
+       --usage-sign
+           Specify 'sign' key usage flag (sets SIGN in privkey, sets VERIFY in pubkey).
+
+       --usage-decrypt
+           Specify 'decrypt' key usage flag (RSA only, set DECRYPT privkey, ENCRYPT in pubkey).
+
+       --usage-derive
+           Specify 'derive' key usage flag (EC only).
+
+       --label name, -a name
+           Specify the name of the object to operate on (or the token label when --init-token is
+           used).
+
+       --list-mechanisms, -M
+           Display a list of mechanisms supported by the token.
+
+       --list-objects, -O
+           Display a list of objects.
+
+       --list-slots, -L
+           Display a list of available slots on the token.
+
+       --list-token-slots, -T
+           List slots with tokens.
+
+       --login, -l
+           Authenticate to the token before performing other operations. This option is not
+           needed if a PIN is provided on the command line.
+
+       --login-type
+           Specify login type ('so', 'user', 'context-specific'; default:'user').
+
+       --mechanism mechanism, -m mechanism
+           Use the specified mechanism for token operations. See -M for a list of mechanisms
+           supported by your token.
+
+       --module mod
+           Specify a PKCS#11 module (or library) to load.
+
+       --moz-cert path, -z path
+           Test a Mozilla-like keypair generation and certificate request. Specify the path to
+           the certificate file.
+
+       --output-file path, -o path
+           Specify the path to a file for output.
+
+       --pin pin, -p pin
+           Use the given pin for token operations. If set to env:VARIABLE, the value of the
+           environment variable VARIABLE is used. WARNING: Be careful using this option as other
+           users may be able to read the command line from the system or if it is embedded in a
+           script. If set to env:VARIABLE, the value of the environment variable VARIABLE is
+           used.
+
+           This option will also set the --login option.
+
+       --puk puk
+           Supply User PUK on the command line.
+
+       --new-pin pin
+           Supply new User PIN on the command line.
+
+       --set-id id, -e id
+           Set the CKA_ID of the object.
+
+       --show-info, -I
+           Display general token information.
+
+       --sign, -s
+           Sign some data.
+
+       --decrypt,
+           Decrypt some data.
+
+       --derive,
+           Derive a secret key using another key and some data.
+
+       --slot id
+           Specify the id of the slot to use.
+
+       --slot-description description
+           Specify the description of the slot to use.
+
+       --slot-index index
+           Specify the index of the slot to use.
+
+       --token-label label
+           Specify the label of token. Will be used the first slot, that has the inserted token
+           with this label.
+
+       --so-pin pin
+           Use the given pin as the Security Officer PIN for some token operations (token
+           initialization, user PIN initialization, etc). If set to env:VARIABLE, the value of
+           the environment variable VARIABLE is used. The same warning as --pin also applies
+           here.
+
+       --test, -t
+           Perform some tests on the token. This option is most useful when used with either
+           --login or --pin.
+
+       --test-hotplug
+           Test hotplug capabilities (C_GetSlotList + C_WaitForSlotEvent).
+
+       --private
+           Set the CKA_PRIVATE attribute (object is only viewable after a login).
+
+       --test-ec
+           Test EC (best used with the --login or --pin option).
+
+       --test-fork
+           Test forking and calling C_Initialize() in the child.
+
+       --type type, -y type
+           Specify the type of object to operate on. Examples are cert, privkey and pubkey.
+
+       --verbose, -v
+           Cause pkcs11-tool to be more verbose.
+
+           NB! This does not affect OpenSC debugging level! To set OpenSC PKCS#11 module into
+           debug mode, set the OPENSC_DEBUG environment variable to a non-zero number.
+
+       --read-object, -r
+           Get object's CKA_VALUE attribute (use with --type).
+
+       --delete-object, -b
+           Delete an object.
+
+       --application-label label
+           Specify the application label of the data object (use with --type data).
+
+       --application-id id
+           Specify the application ID of the data object (use with --type data).
+
+       --issuer data
+           Specify the issuer in hexadecimal format (use with --type cert).
+
+       --subject data
+           Specify the subject in hexadecimal format (use with --type cert/privkey/pubkey).
+
+       --signature-format format
+           Format for ECDSA signature: 'rs' (default), 'sequence', 'openssl'.
+
+       --write-object id, -w path
+           Write a key or certificate object to the token.  path points to the DER-encoded
+           certificate or key file.
+
+       --generate-random num
+           Get num bytes of random data.

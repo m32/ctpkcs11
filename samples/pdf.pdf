@@ -1,0 +1,94 @@
+%PDF-1.3
+%บบþฺ
+3 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/Contents 4 0 R>>
+endobj
+4 0 obj
+<</Length 78>>
+stream
+2 J
+0.57 w
+BT /F1 13.00 Tf ET
+BT 75.22 778.46 Td (Hello, world page=0.) Tj ET
+
+endstream
+endobj
+5 0 obj
+<</Type /Page
+/Parent 1 0 R
+/Resources 2 0 R
+/Contents 6 0 R>>
+endobj
+6 0 obj
+<</Length 78>>
+stream
+2 J
+0.57 w
+BT /F1 13.00 Tf ET
+BT 75.22 778.46 Td (Hello, world page=1.) Tj ET
+
+endstream
+endobj
+1 0 obj
+<</Type /Pages
+/Kids [3 0 R 5 0 R ]
+/Count 2
+/MediaBox [0 0 595.28 841.89]
+>>
+endobj
+7 0 obj
+<</Type /Font
+/BaseFont /Helvetica
+/Subtype /Type1
+/Encoding /WinAnsiEncoding
+>>
+endobj
+2 0 obj
+<<
+/ProcSet [/PDF /Text /ImageB /ImageC /ImageI]
+/Font <<
+/F1 7 0 R
+>>
+/XObject <<
+>>
+>>
+endobj
+8 0 obj
+<<
+/Producer (PyFPDF 1.7.2 http://pyfpdf.googlecode.com/)
+/CreationDate (D:20211208001148)
+>>
+endobj
+9 0 obj
+<<
+/Type /Catalog
+/Pages 1 0 R
+/OpenAction [3 0 R /FitH null]
+/PageLayout /OneColumn
+>>
+endobj
+xref
+0 10
+0000000000 65535 f 
+0000000423 00000 n 
+0000000612 00000 n 
+0000000015 00000 n 
+0000000093 00000 n 
+0000000219 00000 n 
+0000000297 00000 n 
+0000000516 00000 n 
+0000000716 00000 n 
+0000000825 00000 n 
+trailer
+<<
+/Size 10
+/Root 9 0 R
+/Info 8 0 R
+/ID [<5136EE59D88912FF672C2CEAA7DF70AF><4DFF0CC964EB7D669FE1965043223912>]
+>>
+startxref
+928
+%%EOF
