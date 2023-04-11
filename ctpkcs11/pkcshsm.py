@@ -10,11 +10,11 @@ class HSMError(Exception):
         return 'HSMError: function:{} error:{}({})'.format(self.func, self.rc, pkcsapi.CKR.get(self.rc, 'unknown'))
     __str__ = __repr__
 
-MechanismSHA1 = pkcsapi.ck_mechanism(pkcsapi.CKM_SHA_1, None)
-MechanismRSAPKCS1 = pkcsapi.ck_mechanism(pkcsapi.CKM_RSA_PKCS, None)
-MechanismRSAGENERATEKEYPAIR = pkcsapi.ck_mechanism(pkcsapi.CKM_RSA_PKCS_KEY_PAIR_GEN, None)
-MechanismECGENERATEKEYPAIR = pkcsapi.ck_mechanism(pkcsapi.CKM_EC_KEY_PAIR_GEN, None)
-MechanismAESGENERATEKEY = pkcsapi.ck_mechanism(pkcsapi.CKM_AES_KEY_GEN, None)
+MechanismSHA1 = pkcsapi.Mechanism(pkcsapi.CKM_SHA_1)
+MechanismRSAPKCS1 = pkcsapi.Mechanism(pkcsapi.CKM_RSA_PKCS)
+MechanismRSAGENERATEKEYPAIR = pkcsapi.Mechanism(pkcsapi.CKM_RSA_PKCS_KEY_PAIR_GEN)
+MechanismECGENERATEKEYPAIR = pkcsapi.Mechanism(pkcsapi.CKM_EC_KEY_PAIR_GEN)
+MechanismAESGENERATEKEY = pkcsapi.Mechanism(pkcsapi.CKM_AES_KEY_GEN)
 
 class Session:
     def __init__(self, hsm, hsession):

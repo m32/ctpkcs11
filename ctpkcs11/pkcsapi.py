@@ -1757,3 +1757,5 @@ CKR = fillDict('CKR_')
 CKS = fillDict('CKS_')
 CKU = fillDict('CKU_')
 CKZ = fillDict('CKZ_')
+
+Mechanism = ck_mechanism

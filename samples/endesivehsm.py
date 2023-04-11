@@ -239,7 +239,7 @@ class HSM(BaseHSM):
         # Sign the TBS Certificate
         data = tbs.dump()
         value = self.session.sign(
-            caprivKey, data, ctpkcs11.api.ck_mechanism(ctpkcs11.api.CKM_SHA256_RSA_PKCS, None)
+            caprivKey, data, ctpkcs11.api.Mechanism(ctpkcs11.api.CKM_SHA256_RSA_PKCS)
         )
         value = bytes(bytearray(value))
 
