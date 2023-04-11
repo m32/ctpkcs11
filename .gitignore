@@ -11,3 +11,9 @@ __pycache__/
 /dist/
 /.eggs/
 .coverage
+
+/samples/*.pem
+/samples/*.der
+/samples/pdf-signed-ctpkcs11.pdf
+/samples/softhsm2/
+/samples/softhsm2.conf
