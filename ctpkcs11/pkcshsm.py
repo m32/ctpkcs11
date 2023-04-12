@@ -22,6 +22,9 @@ class Session:
         self.hsession = hsession
 
     def closeSession(self):
+        rc = self.hsm.funcs.C_CloseSession(self.hsession)
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_CloseSession")
         self.hsession = None
         self.hsm = None
 
@@ -183,6 +186,7 @@ class HSM:
         rc = self.lhsm.C_GetFunctionList(ct.byref(pfuncs))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_GetFunctionList")
+        self.dllpath = dllpath
         self.funcs = pfuncs.contents
 
     def open(self):
@@ -248,33 +252,33 @@ class HSM:
         return Session(self, hsession)
 
     def displayInfo(self):
-        print(
-            "C_GetFunctionList version: {0}.{1}".format(
-                self.funcs.version.major, self.funcs.version.minor
-            )
-        )
+        print("Info for: {}".format(self.dllpath))
+        print("\tfunctions version: {0}.{1}".format(self.funcs.version.major, self.funcs.version.minor))
         info = pkcsapi.ck_info()
         rc = self.funcs.C_GetInfo(ct.byref(info))
-        print("C_GetInfo={:x}".format(rc))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_GetInfo")
-        print("C_GetInfo version info:")
-        print(
-            "version: {0}.{1}".format(
-                info.cryptoki_version.major, info.cryptoki_version.minor
-            )
-        )
-        print("manufacturer:", bytes(info.manufacturer_id).decode("ascii"))
-        print("flags:", info.flags)
-        print("description:", bytes(info.library_description).decode("ascii"))
-        print(
-            "library version: {0}.{1}".format(
-                info.library_version.major, info.library_version.minor
-            )
-        )
+        print("\tversion: {0}.{1}".format(info.cryptoki_version.major, info.cryptoki_version.minor))
+        print("\tmanufacturer:", bytes(info.manufacturer_id).decode("ascii").strip())
+        print("\tflags:", info.flags)
+        print("\tdescription:", bytes(info.library_description).decode("ascii").strip())
+        print("\tlibrary version: {0}.{1}".format(info.library_version.major, info.library_version.minor))
+
+    def displaySlotInfo(self, slot):
+        slotinfo = pkcsapi.ck_slot_info()
+        rc = self.funcs.C_GetSlotInfo(slot, ct.byref(slotinfo))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_GetSlotInfo")
+        print("\tSlot number:{}".format(slot))
+        print("\t\tDescription:", bytes(slotinfo.slot_description).decode("ascii").strip())
+        print("\t\tManufacturer_id:", bytes(slotinfo.manufacturer_id).decode("ascii").strip())
+        print("\t\tFlags:", slotinfo.flags)
+        print("\t\tHardware version: {0}.{1}".format(slotinfo.hardware_version.major, slotinfo.hardware_version.minor))
+        print("\t\tFirmware version: {0}.{1}".format(slotinfo.firmware_version.major, slotinfo.firmware_version.minor))
 
     def displayTokenInfo(self, slot):
         info = self.getTokenInfo(slot)
+        print("\tToken:")
         print("\t\tlabel:", info.label)
         print("\t\tmanufacturer:",info.manufacturer_id)
         print("\t\tmodel:", info.model)
@@ -290,37 +294,13 @@ class HSM:
         print("\t\tfree_public_memory:", info.free_public_memory)
         print("\t\ttotal_private_memory:", info.total_private_memory)
         print("\t\tfree_private_memory:", info.free_private_memory)
-        print("\t\thardware: {0}.{1}".format(
-                info.hardware_version.major, info.hardware_version.minor
-        ))
-        print("\t\tfirmware: {0}.{1}".format(
-                info.firmware_version.major, info.firmware_version.minor
-            )
-        )
+        print("\t\thardware: {0}.{1}".format(info.hardware_version.major, info.hardware_version.minor))
+        print("\t\tfirmware: {0}.{1}".format(info.firmware_version.major, info.firmware_version.minor))
         print("\t\ttime:", info.utc_time)
         return True
 
-    def displaySlotInfo(self, slot):
-        slotinfo = pkcsapi.ck_slot_info()
-        rc = self.funcs.C_GetSlotInfo(slot, ct.byref(slotinfo))
-        if rc != pkcsapi.CKR_OK:
-            raise HSMError(rc, "C_GetSlotInfo")
-        print("\t", "*" * 20, "slot:{}".format(slot))
-        print("\tDescription:", bytes(slotinfo.slot_description).decode("ascii"))
-        print("\tManufacturer_id:", bytes(slotinfo.manufacturer_id).decode("ascii"))
-        print("\tFlags:", slotinfo.flags)
-        print(
-            "\tHardware version: {0}.{1}".format(
-                slotinfo.hardware_version.major, slotinfo.hardware_version.minor
-            )
-        )
-        print(
-            "\tFirmware version: {0}.{1}".format(
-                slotinfo.firmware_version.major, slotinfo.firmware_version.minor
-            )
-        )
-
     def displaySlots(self, tokenpresent, pin):
+        print("Slots(tpkenpresent={})".format(tokenpresent))
         slot_list = self.getSlotList(tokenpresent)
         for slot in slot_list:
             self.displaySlotInfo(slot)
@@ -341,9 +321,8 @@ class HSM:
                 session.closeSession()
 
     def displaySlotObjects(self, hsession):
-        print("\t\t", "*" * 10, "objs")
+        print("\tObjects:")
         rc = self.funcs.C_FindObjectsInit(hsession, None, 0)
-        print("\t\tC_FindObjectsInit={:x}".format(rc))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_FindObjectsInit")
         SearchResult = (pkcsapi.ck_object_handle_t * 30)()
@@ -353,17 +332,18 @@ class HSM:
                 rc = self.funcs.C_FindObjects(
                     hsession, ct.byref(SearchResult), len(SearchResult), ct.byref(maxobj)
                 )
-                print("\t\tC_FindObjects={:x}, maxobj={}".format(rc, maxobj))
                 if rc != pkcsapi.CKR_OK or maxobj.value == 0:
                     break
+                #if rc == pkcsapi.CKR_OK and maxobj.value > 0:
                 for i in range(maxobj.value):
                     self.displaySlotAttributes(hsession, SearchResult[i])
         finally:
             rc = self.funcs.C_FindObjectsFinal(hsession)
-            print("\t\tC_FindObjectsFinal={:x}".format(rc))
+            if rc != pkcsapi.CKR_OK:
+                raise HSMError(rc, "C_FindObjectsFinal")
 
-    def displaySlotAttributes(self, hsession, hslot):
-        print("\t\tobject=0x{:x}".format(hslot))
+    def displaySlotAttributes(self, hsession, hobject):
+        print("\t\thobject=0x{:x}".format(hobject))
         def getbuf(n):
             class U(ct.Union):
                 _fields_ = (
@@ -386,13 +366,14 @@ class HSM:
         for value, name in pkcsapi.CKA.items():
             t.type = value
             t.value_len = ct.sizeof(buf)
-            rc = self.funcs.C_GetAttributeValue(hsession, hslot, ct.byref(t), 1)
+            rc = self.funcs.C_GetAttributeValue(hsession, hobject, ct.byref(t), 1)
+            if rc == pkcsapi.CKR_ATTRIBUTE_SENSITIVE:
+                print("\t\t\t", name, "(", t.type, ") disabled because", disabledby[rc])
             if rc in (
                 pkcsapi.CKR_ATTRIBUTE_SENSITIVE,
                 pkcsapi.CKR_ATTRIBUTE_TYPE_INVALID,
                 pkcsapi.CKR_ATTRIBUTE_VALUE_INVALID,
             ):
-                #print("\t\t\t", name, "(", t.type, ") disabled because", disabledby[rc])
                 continue
             if rc != pkcsapi.CKR_OK:
                 print(
@@ -404,7 +385,7 @@ class HSM:
             if t.value_len > ct.sizeof(buf):
                 buf = getbuf(t.value_len + 1)
                 t = pkcsapi.ck_attribute(0, ct.addressof(buf), ct.sizeof(buf))
-                rc = self.funcs.C_GetAttributeValue(hsession, hslot, ct.byref(t), 1)
+                rc = self.funcs.C_GetAttributeValue(hsession, hobject, ct.byref(t), 1)
                 if rc != pkcsapi.CKR_OK:
                     raise HSMError(rc, "C_GetAttributeValue")
             try:
