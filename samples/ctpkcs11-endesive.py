@@ -8,9 +8,14 @@ from ctpkcs11 import pkcsapi, HSMError
 import endesivehsm as hsm
 
 class Signer(hsm.HSM):
+    cfg = None
+
+    def setConfigData(self, cfg):
+        self.cfg = cfg
+
     def certificate(self):
-        self.login("endesieve", "secret1")
-        keyid = bytes((0x66,0x66,0x90))
+        self.login(self.cfg.label, self.cfg.pin)
+        keyid = self.cfg.keyid
         try:
             pk11objects = self.session.findObjects([
                 (pkcsapi.CKA_CLASS, pkcsapi.CKO_CERTIFICATE)
@@ -35,7 +40,7 @@ class Signer(hsm.HSM):
         return None, None
 
     def sign(self, keyid, data, mech):
-        self.login("endesieve", "secret1")
+        self.login(self.cfg.label, self.cfg.pin)
         try:
             privKey = self.session.findObjects([
                 (pkcsapi.CKA_CLASS, pkcsapi.CKO_PRIVATE_KEY),
@@ -60,11 +65,9 @@ def main():
         'reason': 'Dokument podpisany cyfrowo',
     }
     cfg = Config()
-    cfg.SoftHSMInit()
     clshsm = Signer(cfg.dllpath)
-    fname = 'pdf.pdf'
-    if len (sys.argv) > 1:
-        fname = sys.argv[1]
+    clshsm.setConfigData(cfg)
+    fname = cfg.options.pdffile
     datau = open(fname, 'rb').read()
     datas = pdf.cms.sign(datau, dct,
         None, None,
@@ -73,7 +76,7 @@ def main():
         clshsm,
 #        tspurl,
     )
-    fname = fname.replace('.pdf', '-signed-ctpkcs11.pdf')
+    fname = fname.replace('.pdf', '-signed-{}.pdf'.format(cfg.options.config))
     with open(fname, 'wb') as fp:
         fp.write(datau)
         fp.write(datas)

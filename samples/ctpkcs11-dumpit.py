@@ -4,11 +4,6 @@ from ctpkcs11 import HSM
 
 def main():
     cfg = Config()
-    cfg.SoftHSMInit()
-    cfg.endesive()
-
-    print(cfg.dllpath, cfg.label, cfg.pin)
-
     cls = HSM(cfg.dllpath)
     cls.open()
     try:

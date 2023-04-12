@@ -40,12 +40,11 @@ class HSM(hsm.HSM):
 
 def main():
     cfg = Config()
-    cfg.SoftHSMInit()
-    cfg.endesive()
-    cls = HSM(cfg.dllpath)
+    assert cfg.options.config == 'softhsm2'
 
-    cls.create("endesieve", "secret1", "secret2")
-    cls.login("endesieve", "secret1")
+    cls = HSM(cfg.dllpath)
+    cls.create(cfg.label, cfg.pin, cfg.sopin)
+    cls.login(cfg.label, cfg.pin)
     try:
         cls.main()
     finally:

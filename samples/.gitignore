@@ -1,0 +1,7 @@
+/softhsm2
+softhsm2.conf
+cert-hsm-ca.der
+cert-hsm-ca.pem
+cert-hsm-user1.der
+cert-hsm-user1.pem
+pdf-signed-*.pdf

@@ -1,6 +1,5 @@
 #!/usr/bin/env vpython3
 # *-* coding: utf-8 *-*
-import sys
 import hashlib
 import ctypes
 from pkcsconfig import Config
@@ -20,7 +19,7 @@ class Signer(HSM):
     def login(self, label, pin):
         slot = self.getSlot(label)
         if slot is None:
-            return
+            raise IOError(2)
         self.session = self.openSession(slot)
         self.session.login(pin)
 
@@ -30,9 +29,8 @@ class Signer(HSM):
             self.session.closeSession()
             self.session = None
 
-    def certificate(self, label, pin):
+    def certificate(self, label, pin, keyid):
         self.login(label, pin)
-        keyid = bytes((0x66, 0x66, 0x90))
         try:
             pk11objects = self.session.findObjects(
                 [(pkcsapi.CKA_CLASS, pkcsapi.CKO_CERTIFICATE)]
@@ -69,7 +67,7 @@ class Signer(HSM):
                 (pkcsapi.CKA_CLASS, pkcsapi.CKO_PRIVATE_KEY),
                 (pkcsapi.CKA_ID, keyid)
             ])[0]
-            mech = pkcsapi.ck_mechanism(getattr(pkcsapi, smech))
+            mech = pkcsapi.Mechanism(getattr(pkcsapi, smech))
             sig = self.session.sign(privKey, data, mech)
             return bytes(sig)
         finally:
@@ -107,29 +105,36 @@ def main():
     from asn1crypto import core, algos
 
     cfg = Config()
-    cfg.SoftHSMInit()
-    cfg.endesive()
-
     cls = Signer(cfg.dllpath)
     cls.open()
     try:
         data = b"Hello, world!\n"
-        keyid = bytes((0x66, 0x66, 0x90))
         if 0:
-            from asn1crypto import pem
-            rkeyid, derbytes = cls.certificate(cfg.label, cfg.pin)
-            cert = pem.armor("CERTIFICATE", derbytes).decode('utf8')
+            from asn1crypto import pem, x509
+            rkeyid, derbytes = cls.certificate(cfg.label, cfg.pin, cfg.keyid)
+            print('keyid=', cfg.keyid, 'rkeyid=', rkeyid)
 
-            print('keyid=', keyid, 'rkeyid=', rkeyid)
+            cert = pem.armor("CERTIFICATE", derbytes).decode('utf8')
             print(cert)
 
-        for smech in ("md5", "sha1", "sha256", "sha384", "sha512"):
+            _, _, cert_bytes = pem.unarmor(cert.encode())
+            cert = x509.Certificate.load(cert_bytes)
+            print('issuer :', cert.issuer.native)
+            print('subject:', cert.subject.native)
+
+        for smech in (
+            #"md5",
+            "sha1",
+            "sha256",
+            "sha384",
+            "sha512"
+        ):
             print("*" * 20, smech)
-            sig1 = cls.sign(cfg.label, cfg.pin, keyid, data, "CKM_%s_RSA_PKCS" % smech.upper())
+            sig1 = cls.sign(cfg.label, cfg.pin, cfg.keyid, data, "CKM_%s_RSA_PKCS" % smech.upper())
             ssig1 = sig1.hex()
             print("sig1:", ssig1[:10], "...", ssig1[-10:])
 
-            ok = cls.verify(cfg.label, cfg.pin, keyid, data, sig1, "CKM_%s_RSA_PKCS" % smech.upper())
+            ok = cls.verify(cfg.label, cfg.pin, cfg.keyid, data, sig1, "CKM_%s_RSA_PKCS" % smech.upper())
             print('verify=', ok)
 
             data_digest = getattr(hashlib, smech)(data).digest()
@@ -143,7 +148,7 @@ def main():
             if 0:
                 bb = core.load(data3)
                 bb.debug()
-            sig3 = cls.sign(cfg.label, cfg.pin, keyid, data3, "CKM_RSA_PKCS")
+            sig3 = cls.sign(cfg.label, cfg.pin, cfg.keyid, data3, "CKM_RSA_PKCS")
             ssig3 = sig3.hex()
             print("sig3:", ssig3[:10], "...", ssig3[-10:])
 
@@ -161,7 +166,7 @@ def main():
             if 0:
                 bb = core.load(data4)
                 bb.debug()
-            sig4 = cls.sign(cfg.label, cfg.pin, keyid, data4, "CKM_RSA_PKCS")
+            sig4 = cls.sign(cfg.label, cfg.pin, cfg.keyid, data4, "CKM_RSA_PKCS")
             ssig4 = sig4.hex()
             print("sig4:", ssig4[:10], "...", ssig4[-10:])
             print("OK?", sig1 == sig3 and sig1 == sig4)

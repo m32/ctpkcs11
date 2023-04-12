@@ -1,0 +1,43 @@
+#!/bin/bash
+E=echo
+E=
+pin=123456
+export OPENSC_DEBUG=9
+export PYKCS11LIB=/devel/bin/proCertumSmartSign/libcrypto3PKCS.so
+#export PYKCS11LIB=/devel/bin/proCertumSmartSign/libcryptoCertum3PKCS.so
+#export PYKCS11LIB=/devel/bin/proCertumSmartSign/SimplySignPKCS_64-MS-1.0.20.so
+
+one(){
+label=$1
+shift
+if [ -z "$label" ]; then
+$E pkcs11-tool --module $PYKCS11LIB \
+--login --pin $pin \
+--id=1 \
+$*
+else
+$E pkcs11-tool --module $PYKCS11LIB \
+--login --pin $pin \
+--label "$label" \
+$*
+fi
+}
+
+load(){
+./x-pkcs11-unizeto.py demo2_user1.p12 1234
+one "USER 1" --write-object cert.crt.der --type cert
+one "USER 1" --write-object cert.pri.der --type privkey
+one "USER 1" --write-object cert.pub.der --type pubkey
+}
+
+delete(){
+one "USER 1" --delete-object --type cert
+one "USER 1" --delete-object --type privkey
+one "USER 1" --delete-object --type pubkey
+}
+
+list(){
+one "" --list-objects
+}
+
+$*

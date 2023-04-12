@@ -87,29 +87,17 @@ def main():
     from asn1crypto import core, algos
 
     cfg = Config()
-    cfg.SoftHSMInit()
-    cfg.endesive()
-
     cls = Signer(cfg.dllpath)
     if 1:
         data = b"Hello, world!\n"
-        keyid = bytes((0x66, 0x66, 0x90))
-        if 0:
-            from asn1crypto import pem
-            rkeyid, derbytes = cls.certificate(cfg.label, cfg.pin)
-            cert = pem.armor("CERTIFICATE", derbytes).decode('utf8')
-
-            print('keyid=', keyid, 'rkeyid=', rkeyid)
-            print(cert)
-
         for smech in ("md5", "sha1", "sha256", "sha384", "sha512"):
             print("*" * 20, smech)
             mech = getattr(PyKCS11, "CKM_%s_RSA_PKCS" % smech.upper())
-            sig1 = cls.sign(cfg.label, cfg.pin, keyid, data, mech)
+            sig1 = cls.sign(cfg.label, cfg.pin, cfg.keyid, data, mech)
             ssig1 = sig1.hex()
             print("sig1:", ssig1[:10], "...", ssig1[-10:])
 
-            ok = cls.verify(cfg.label, cfg.pin, keyid, data, sig1, mech)
+            ok = cls.verify(cfg.label, cfg.pin, cfg.keyid, data, sig1, mech)
             print('verify=', ok)
 
             data_digest = getattr(hashlib, smech)(data).digest()
@@ -123,7 +111,7 @@ def main():
             if 0:
                 bb = core.load(data3)
                 bb.debug()
-            sig3 = cls.sign(cfg.label, cfg.pin, keyid, data3, getattr(PyKCS11, "CKM_RSA_PKCS"))
+            sig3 = cls.sign(cfg.label, cfg.pin, cfg.keyid, data3, getattr(PyKCS11, "CKM_RSA_PKCS"))
             ssig3 = sig3.hex()
             print("sig3:", ssig3[:10], "...", ssig3[-10:])
 
@@ -141,7 +129,7 @@ def main():
             if 0:
                 bb = core.load(data4)
                 bb.debug()
-            sig4 = cls.sign(cfg.label, cfg.pin, keyid, data4, getattr(PyKCS11, "CKM_RSA_PKCS"))
+            sig4 = cls.sign(cfg.label, cfg.pin, cfg.keyid, data4, getattr(PyKCS11, "CKM_RSA_PKCS"))
             ssig4 = sig4.hex()
             print("sig4:", ssig4[:10], "...", ssig4[-10:])
             print("OK?", sig1 == sig3 and sig1 == sig4)
