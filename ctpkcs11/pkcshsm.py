@@ -16,6 +16,14 @@ MechanismRSAGENERATEKEYPAIR = pkcsapi.Mechanism(pkcsapi.CKM_RSA_PKCS_KEY_PAIR_GE
 MechanismECGENERATEKEYPAIR = pkcsapi.Mechanism(pkcsapi.CKM_EC_KEY_PAIR_GEN)
 MechanismAESGENERATEKEY = pkcsapi.Mechanism(pkcsapi.CKM_AES_KEY_GEN)
 
+def buffer(data):
+    if type(data) == int:
+        bdata = ct.create_string_buffer(data)
+    else:
+        bdata = ct.create_string_buffer(len(data))
+        bdata.value = data
+    return bdata
+
 class Session:
     def __init__(self, hsm, hsession):
         self.hsm = hsm
@@ -136,17 +144,14 @@ class Session:
         rc = self.hsm.funcs.C_SignInit(self.hsession, ct.byref(mech), privKey)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_SignInit")
-        #datasig = (ct.c_ubyte*len(data))()
-        #datasig.value = bytearray(data)
-        datasig = ct.create_string_buffer(data)
+        datasig = buffer(data)
         siglen = ct.c_ulong(0)
         # first call get signature size
         rc = self.hsm.funcs.C_Sign(self.hsession, ct.byref(datasig), len(data), None, ct.byref(siglen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Sign")
         # second call get actual signature data
-        signature = (ct.c_ubyte*siglen.value)()
-        #signature = ct.create_string_buffer(siglen.value)
+        signature = buffer(siglen.value)
         rc = self.hsm.funcs.C_Sign(self.hsession, ct.byref(datasig), len(data), ct.byref(signature), ct.byref(siglen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Sign")
@@ -157,14 +162,44 @@ class Session:
         rc = self.hsm.funcs.C_VerifyInit(self.hsession, ct.byref(mech), key)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_VerifyInit")
-        bdata = ct.create_string_buffer(data)
-        bsignature = ct.create_string_buffer(signature)
+        bdata = buffer(data)
+        bsignature = buffer(signature)
         rc = self.hsm.funcs.C_Verify(self.hsession, ct.byref(bdata), len(data), ct.byref(bsignature), len(signature))
         if rc == pkcsapi.CKR_OK:
             return True
         elif rc == pkcsapi.CKR_SIGNATURE_INVALID:
             return False
         raise HSMError(rc, "C_Verify")
+
+    def encrypt(self, key, data, mech=MechanismRSAPKCS1):
+        rc = self.hsm.funcs.C_EncryptInit(self.hsession, ct.byref(mech), key)
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_EncryptInit")
+        bdata = buffer(data)
+        edatalen = ct.c_ulong(0)
+        rc = self.hsm.funcs.C_Encrypt(self.hsession, ct.byref(bdata), len(bdata), None, ct.byref(edatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_Encrypt")
+        edata = buffer(edatalen.value)
+        rc = self.hsm.funcs.C_Encrypt(self.hsession, ct.byref(bdata), len(bdata), ct.byref(edata), ct.byref(edatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_Encrypt")
+        return bytes(edata)
+
+    def decrypt(self, key, data, mech=MechanismRSAPKCS1):
+        rc = self.hsm.funcs.C_DecryptInit(self.hsession, ct.byref(mech), key)
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_DecryptInit")
+        bdata = buffer(data)
+        ddatalen = ct.c_ulong(0)
+        rc = self.hsm.funcs.C_Decrypt(self.hsession, ct.byref(bdata), len(bdata), None, ct.byref(ddatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_Decrypt")
+        ddata = buffer(ddatalen.value)
+        rc = self.hsm.funcs.C_Decrypt(self.hsession, ct.byref(bdata), len(bdata), ct.byref(ddata), ct.byref(ddatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_Decrypt")
+        return bytes(ddata[:ddatalen.value])
 
     def displaySessionInfo(self):
         sessioninfo = pkcsapi.ck_session_info()
@@ -177,9 +212,6 @@ class Session:
 
 class HSM:
     def __init__(self, dllpath):
-        # self.lcrypto = ct.CDLL("/usr/lib/x86_64-linux-gnu/libcrypto.so.1.1", ct.RTLD_GLOBAL)
-        self.lssl = ct.CDLL("/usr/lib/x86_64-linux-gnu/libssl.so.1.1", ct.RTLD_GLOBAL)
-        # self.lcertum = ct.CDLL("/devel/bin/proCertumSmartSign/libcryptoCertum3pkcsapi.so")
         self.lhsm = ct.CDLL(dllpath)
 
         pfuncs = ct.POINTER(pkcsapi.ck_function_list)()
