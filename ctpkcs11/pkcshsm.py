@@ -283,6 +283,38 @@ class HSM:
             raise HSMError(rc, "C_OpenSession")
         return Session(self, hsession)
 
+    def getMechanismList(self, slot):
+        nmech = ct.c_ulong(0)
+        rc = self.funcs.C_GetMechanismList(slot, None, ct.byref(nmech))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_GetMechanismList")
+        mechs = (pkcsapi.ck_mechanism_type_t*nmech.value)()
+        rc = self.funcs.C_GetMechanismList(slot, ct.byref(mechs), ct.byref(nmech))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_GetMechanismList")
+        result = []
+        for mechanism in mechs:
+            if mechanism >= pkcsapi.CKM_VENDOR_DEFINED:
+                k = 'CKM_VENDOR_DEFINED_0x%X' % (mechanism - pkcsapi.CKM_VENDOR_DEFINED)
+                pkcsapi.CKM[k] = mechanism
+                pkcsapi.CKM[mechanism] = k
+            else:
+                try:
+                    k = pkcsapi.CKM[mechanism]
+                except KeyError:
+                    k = 'CKM_UNKNOWN_0x%X' % mechanism
+                    pkcsapi.CKM[mechanism] = k
+                    pkcsapi.CKM[k] = mechanism
+            result.append(mechanism)
+        return result
+
+    def getMechanismInfo(self, slot, mech):
+        info = pkcsapi.ck_mechanism_info()
+        rc = self.funcs.C_GetMechanismInfo(slot, mech, ct.byref(info))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_GetMechanismInfo")
+        return info
+
     def displayInfo(self):
         print("Info for: {}".format(self.dllpath))
         print("\tfunctions version: {0}.{1}".format(self.funcs.version.major, self.funcs.version.minor))

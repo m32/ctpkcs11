@@ -806,6 +806,31 @@ CKM_DH_PKCS_PARAMETER_GEN = 0x2001
 CKM_X9_42_DH_PARAMETER_GEN = 0x2002
 CKM_VENDOR_DEFINED = 1 << 31
 
+CKM_SHA224 = 0x255
+CKM_SHA224_HMAC = 0x256
+CKM_SHA224_HMAC_GENERAL = 0x257
+CKM_SHA224_RSA_PKCS = 0x46
+CKM_SHA224_RSA_PKCS_PSS = 0x47
+CKM_SHA224_KEY_DERIVATION = 0x396
+
+CKM_CAMELLIA_KEY_GEN = 0x550
+CKM_CAMELLIA_ECB = 0x551
+CKM_CAMELLIA_CBC = 0x552
+CKM_CAMELLIA_MAC = 0x553
+CKM_CAMELLIA_MAC_GENERAL = 0x554
+CKM_CAMELLIA_CBC_PAD = 0x555
+CKM_CAMELLIA_ECB_ENCRYPT_DATA = 0x556
+CKM_CAMELLIA_CBC_ENCRYPT_DATA = 0x557
+
+CKM_AES_KEY_WRAP = 0x2109
+CKM_AES_KEY_WRAP_PAD = 0x210a
+
+CKM_RSA_PKCS_TPM_1_1 = 0x4001
+CKM_RSA_PKCS_OAEP_TPM_1_1 = 0x4002
+
+CKM_EC_EDWARDS_KEY_PAIR_GEN = 0x1055
+CKM_EDDSA = 0x1057
+
 CKG_MGF1_SHA1 = 0x00000001
 CKG_MGF1_SHA256 = 0x00000002
 CKG_MGF1_SHA384 = 0x00000003
@@ -1206,7 +1231,7 @@ CK_C_GetTokenInfo  = CFUNCTYPE(ck_rv_t, ck_slot_id_t, POINTER(ck_token_info))
 # ck_rv_t CK_C_WaitForSlotEvent (ck_flags_t flags, ck_slot_id_t *slot, void *reserved)
 CK_C_WaitForSlotEvent  = CFUNCTYPE(ck_rv_t, ck_flags_t, POINTER(ck_slot_id_t), c_void_p)
 # ck_rv_t CK_C_GetMechanismList (ck_slot_id_t slot_id, ck_mechanism_type_t *mechanism_list, unsigned long *count)
-CK_C_GetMechanismList  = CFUNCTYPE(ck_rv_t, ck_slot_id_t, POINTER(ck_mechanism_type_t), POINTER(c_ulong))
+CK_C_GetMechanismList  = CFUNCTYPE(ck_rv_t, ck_slot_id_t, c_void_p, POINTER(c_ulong))
 # ck_rv_t CK_C_GetMechanismInfo (ck_slot_id_t slot_id, ck_mechanism_type_t type, struct ck_mechanism_info *info)
 CK_C_GetMechanismInfo  = CFUNCTYPE(ck_rv_t, ck_slot_id_t, ck_mechanism_type_t, POINTER(ck_mechanism_info))
 # ck_rv_t CK_C_InitToken (ck_slot_id_t slot_id, unsigned char *pin, unsigned long pin_len, unsigned char *label)
@@ -1742,6 +1767,7 @@ def fillDict(prefix):
         v = kv[k]
         if k[:lp] == prefix:
             d[v] = k
+            d[k] = v
     return d
 
 CKA = fillDict('CKA_')
