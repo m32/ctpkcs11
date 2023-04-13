@@ -59,7 +59,10 @@ slots.removable = false
             self.dllpath = "/usr/lib/softhsm/libsofthsm2.so"
         self.label = 'endesieve'
         self.pin = 'secret1'
+        self.sopin = 'secret2'
         self.keyid = bytes((0x66, 0x66, 0x90))
+
+#        self.dllpath='/devel/00mirror-cvs/00-m32/ctpkcs11/SoftHSMv2/build/src/lib/libsofthsm2.so'
 
     def SoftHSMCleanup(self):
         def unlink(fqname):
@@ -74,9 +77,6 @@ slots.removable = false
         unlink(os.path.join(self.top, "cert.pri.der"))
         unlink(os.path.join(self.top, "cert.pub.der"))
         shutil.rmtree(os.path.join(self.top, "softhsm2"), ignore_errors=True)
-        self.label = ''
-        self.pin = ''
-        self.keyid = bytes((0,))
 
     def Yubico(self):
         self.dllpath = '/usr/lib/x86_64-linux-gnu/libykcs11.so'

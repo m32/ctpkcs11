@@ -32,7 +32,12 @@ class HSM(BaseHSM):
     def __init__(self, dllpath):
         self.pkcs11 = ctpkcs11.HSM(dllpath)
         self.session = None
+
+    def open(self):
         self.pkcs11.open()
+
+    def close(self):
+        self.pkcs11.close()
 
     def getSlot(self, label):
         slots = self.pkcs11.getSlotList(tokenPresent=True)
@@ -49,7 +54,7 @@ class HSM(BaseHSM):
         slot = self.getSlot(label)
         if slot is not None:
             return
-        slot = self.pkcs11.getSlotList(tokenPresent=True)[-1]
+        slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
         self.pkcs11.initToken(slot, sopin, label)
         session = self.pkcs11.openSession(
             slot, ctpkcs11.api.CKF_SERIAL_SESSION | ctpkcs11.api.CKF_RW_SESSION
@@ -317,3 +322,108 @@ class HSM(BaseHSM):
             fp.write(der_bytes)
         with open(fname + ".pem", "wb") as fp:
             fp.write(pem_bytes)
+
+class Signer(HSM):
+    session = None
+
+    def getSlot(self, label):
+        slots = self.pkcs11.getSlotList(tokenPresent=True)
+        for slot in slots:
+            info = self.pkcs11.getTokenInfo(slot)
+            if info.label == label:
+                return slot
+        return None
+
+    def login(self, label, pin):
+        slot = self.getSlot(label)
+        if slot is None:
+            raise IOError(2)
+        self.session = self.pkcs11.openSession(slot)
+        self.session.login(pin)
+
+    def logout(self):
+        if self.session is not None:
+            self.session.logout()
+            self.session.closeSession()
+            self.session = None
+
+    def certificate(self, label, pin, keyid):
+        self.login(label, pin)
+        try:
+            pk11objects = self.session.findObjects(
+                [(ctpkcs11.api.CKA_CLASS, ctpkcs11.api.CKO_CERTIFICATE)]
+            )
+            all_attributes = [
+                # ctpkcs11.api.CKA_SUBJECT,
+                ctpkcs11.api.CKA_VALUE,
+                # ctpkcs11.api.CKA_ISSUER,
+                # ctpkcs11.api.CKA_CERTIFICATE_CATEGORY,
+                # ctpkcs11.api.CKA_END_DATE,
+                ctpkcs11.api.CKA_ID,
+            ]
+
+            for pk11object in pk11objects:
+                try:
+                    attributes = self.session.getAttributeValue(
+                        pk11object, all_attributes
+                    )
+                except AssertionError:
+                    continue
+
+                attrDict = dict(list(zip(all_attributes, attributes)))
+                cert = bytes(attrDict[ctpkcs11.api.CKA_VALUE])
+                if keyid == bytes(attrDict[ctpkcs11.api.CKA_ID]):
+                    return keyid, cert
+        finally:
+            self.logout()
+        return None, None
+
+    def sign(self, label, pin, keyid, data, smech):
+        self.login(label, pin)
+        try:
+            privKey = self.session.findObjects([
+                (ctpkcs11.api.CKA_CLASS, ctpkcs11.api.CKO_PRIVATE_KEY),
+                (ctpkcs11.api.CKA_ID, keyid)
+            ])[0]
+            mech = ctpkcs11.api.Mechanism(getattr(ctpkcs11.api, smech))
+            sig = self.session.sign(privKey, data, mech)
+            return bytes(sig)
+        finally:
+            self.logout()
+
+    def verify(self, label, pin, keyid, data, signature, smech):
+        self.login(label, pin)
+        try:
+            pubKey = self.session.findObjects([
+                (ctpkcs11.api.CKA_CLASS, ctpkcs11.api.CKO_PUBLIC_KEY),
+                (ctpkcs11.api.CKA_ID, keyid)
+            ])[0]
+            mech = ctpkcs11.api.Mechanism(getattr(ctpkcs11.api, smech))
+            ok = self.session.verify(pubKey, data, signature, mech)
+            return ok
+        finally:
+            self.logout()
+
+    def encrypt(self, label, pin, keyid, data, mech):
+        self.login(label, pin)
+        try:
+            key = self.session.findObjects([
+                (ctpkcs11.api.CKA_CLASS, ctpkcs11.api.CKO_PUBLIC_KEY),
+                (ctpkcs11.api.CKA_ID, keyid)
+            ])[0]
+            edata = self.session.encrypt(key, data, mech)
+            return bytes(edata)
+        finally:
+            self.logout()
+
+    def decrypt(self, label, pin, keyid, data, mech):
+        self.login(label, pin)
+        try:
+            key = self.session.findObjects([
+                (ctpkcs11.api.CKA_CLASS, ctpkcs11.api.CKO_PRIVATE_KEY),
+                (ctpkcs11.api.CKA_ID, keyid)
+            ])[0]
+            ddata = self.session.decrypt(key, data, mech)
+            return bytes(ddata)
+        finally:
+            self.logout()

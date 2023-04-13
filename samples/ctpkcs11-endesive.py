@@ -66,20 +66,23 @@ def main():
     }
     cfg = Config()
     clshsm = Signer(cfg.dllpath)
-    clshsm.setConfigData(cfg)
-    fname = cfg.options.pdffile
-    datau = open(fname, 'rb').read()
-    datas = pdf.cms.sign(datau, dct,
-        None, None,
-        [],
-        'sha256',
-        clshsm,
-#        tspurl,
-    )
-    fname = fname.replace('.pdf', '-signed-{}.pdf'.format(cfg.options.config))
-    with open(fname, 'wb') as fp:
-        fp.write(datau)
-        fp.write(datas)
-
+    clshsm.open()
+    try:
+        clshsm.setConfigData(cfg)
+        fname = cfg.options.pdffile
+        datau = open(fname, 'rb').read()
+        datas = pdf.cms.sign(datau, dct,
+            None, None,
+            [],
+            'sha256',
+            clshsm,
+#            tspurl,
+        )
+        fname = fname.replace('.pdf', '-signed-{}.pdf'.format(cfg.options.config))
+        with open(fname, 'wb') as fp:
+            fp.write(datau)
+            fp.write(datas)
+    finally:
+        clshsm.close()
 
 main()

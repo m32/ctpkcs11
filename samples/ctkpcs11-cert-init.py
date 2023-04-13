@@ -43,10 +43,14 @@ def main():
     assert cfg.options.config == 'softhsm2'
 
     cls = HSM(cfg.dllpath)
-    cls.create(cfg.label, cfg.pin, cfg.sopin)
-    cls.login(cfg.label, cfg.pin)
+    cls.open()
     try:
-        cls.main()
+        cls.create(cfg.label, cfg.pin, cfg.sopin)
+        cls.login(cfg.label, cfg.pin)
+        try:
+            cls.main()
+        finally:
+            cls.logout()
     finally:
-        cls.logout()
+        cls.close()
 main()
