@@ -200,6 +200,10 @@ from ctypes import (
     c_void_p,
     Structure,
     CFUNCTYPE,
+    sizeof,
+    addressof,
+    byref,
+    create_string_buffer,
 )
 
 c_ubyte_p = POINTER(c_ubyte)
@@ -896,6 +900,17 @@ struct ck_gcm_params
 };
 """
 )
+ck_ecdh1_derive_params = cstruct(
+    """
+struct ck_ecdh1_derive_params {
+  unsigned long kdf;
+  unsigned long ulSharedDataLen;
+  void * pSharedData;
+  unsigned long ulPublicDataLen;
+  void * pPublicData;
+};
+"""
+)                             
 
 CKF_HW = 1 << 0
 CKF_ENCRYPT = 1 << 8
@@ -1333,15 +1348,15 @@ CK_C_SignEncryptUpdate  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, c_void_p, c_ul
 # ck_rv_t CK_C_DecryptVerifyUpdate (ck_session_handle_t session, unsigned char *encrypted_part, unsigned long encrypted_part_len, unsigned char *part, unsigned long *part_len)
 CK_C_DecryptVerifyUpdate  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, c_void_p, c_ulong, c_void_p, POINTER(c_ulong))
 # ck_rv_t CK_C_GenerateKey (ck_session_handle_t session, struct ck_mechanism *mechanism, struct ck_attribute *templ, unsigned long count, ck_object_handle_t *key)
-CK_C_GenerateKey  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), POINTER(ck_attribute), c_ulong, POINTER(ck_object_handle_t))
+CK_C_GenerateKey  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), c_void_p, c_ulong, POINTER(ck_object_handle_t))
 # ck_rv_t CK_C_GenerateKeyPair (ck_session_handle_t session, struct ck_mechanism *mechanism, struct ck_attribute *public_key_template, unsigned long public_key_attribute_count, struct ck_attribute *private_key_template, unsigned long private_key_attribute_count, ck_object_handle_t *public_key, ck_object_handle_t *private_key)
-CK_C_GenerateKeyPair  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), POINTER(ck_attribute), c_ulong, POINTER(ck_attribute), c_ulong, POINTER(ck_object_handle_t), POINTER(ck_object_handle_t))
+CK_C_GenerateKeyPair  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), c_void_p, c_ulong, POINTER(ck_attribute), c_ulong, POINTER(ck_object_handle_t), POINTER(ck_object_handle_t))
 # ck_rv_t CK_C_WrapKey (ck_session_handle_t session, struct ck_mechanism *mechanism, ck_object_handle_t wrapping_key, ck_object_handle_t key, unsigned char *wrapped_key, unsigned long *wrapped_key_len)
 CK_C_WrapKey  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), ck_object_handle_t, ck_object_handle_t, c_void_p, POINTER(c_ulong))
 # ck_rv_t CK_C_UnwrapKey (ck_session_handle_t session, struct ck_mechanism *mechanism, ck_object_handle_t unwrapping_key, unsigned char *wrapped_key, unsigned long wrapped_key_len, struct ck_attribute *templ, unsigned long attribute_count, ck_object_handle_t *key)
-CK_C_UnwrapKey  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), ck_object_handle_t, c_void_p, c_ulong, POINTER(ck_attribute), c_ulong, POINTER(ck_object_handle_t))
+CK_C_UnwrapKey  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), ck_object_handle_t, c_void_p, c_ulong, c_void_p, c_ulong, POINTER(ck_object_handle_t))
 # ck_rv_t CK_C_DeriveKey (ck_session_handle_t session, struct ck_mechanism *mechanism, ck_object_handle_t base_key, struct ck_attribute *templ, unsigned long attribute_count, ck_object_handle_t *key)
-CK_C_DeriveKey  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), ck_object_handle_t, POINTER(ck_attribute), c_ulong, POINTER(ck_object_handle_t))
+CK_C_DeriveKey  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, POINTER(ck_mechanism), ck_object_handle_t, c_void_p, c_ulong, POINTER(ck_object_handle_t))
 # ck_rv_t CK_C_SeedRandom (ck_session_handle_t session, unsigned char *seed, unsigned long seed_len)
 CK_C_SeedRandom  = CFUNCTYPE(ck_rv_t, ck_session_handle_t, c_void_p, c_ulong)
 # ck_rv_t CK_C_GenerateRandom (ck_session_handle_t session, unsigned char *random_data, unsigned long random_len)
@@ -1707,6 +1722,28 @@ ctypedef("typedef struct ck_c_initialize_args *CK_C_INITIALIZE_ARGS_PTR;")
 
 # endif	''' PKCS11_H '''
 
+CKA_GOSTR3410_PARAMS = 0x00000250
+CKA_GOSTR3411_PARAMS = 0x00000251
+
+CKD_NULL = 0x00000001
+
+CKK_GOSTR3410 =0x00000030
+CKK_GOSTR3411 = 0x00000031
+
+CKM_AES_GCM = 0x00001087
+CKM_GOSTR3410 = 0x00001201
+CKM_GOSTR3410_DERIVE = 0x00001204
+CKM_GOSTR3410_KEY_PAIR_GEN = 0x00001200
+CKM_GOSTR3410_KEY_WRAP = 0x00001203
+CKM_GOSTR3410_WITH_GOSTR3411 = 0x00001202
+CKM_GOSTR3411 = 0x00001210
+CKM_GOSTR3411_HMAC = 0x00001211
+
+CKP_PKCS5_PBKD2_HMAC_GOSTR3411 = 0x00000002
+
+CKZ_DATA_SPECIFIED = 0x00000001
+CKZ_SALT_SPECIFIED = 0x00000001
+
 AttrIsBool = (
     CKA_ALWAYS_AUTHENTICATE,
     CKA_ALWAYS_SENSITIVE,
@@ -1784,4 +1821,67 @@ CKS = fillDict('CKS_')
 CKU = fillDict('CKU_')
 CKZ = fillDict('CKZ_')
 
+def buffer(data):
+    if type(data) == int:
+        bdata = create_string_buffer(data)
+    else:
+        bdata = create_string_buffer(len(data))
+        bdata.value = data
+    return bdata
+
 Mechanism = ck_mechanism
+
+MechanismSHA1 = Mechanism(CKM_SHA_1)
+MechanismRSAPKCS1 = Mechanism(CKM_RSA_PKCS)
+MechanismRSAGENERATEKEYPAIR = Mechanism(CKM_RSA_PKCS_KEY_PAIR_GEN)
+MechanismECGENERATEKEYPAIR = Mechanism(CKM_EC_KEY_PAIR_GEN)
+MechanismAESGENERATEKEY = Mechanism(CKM_AES_KEY_GEN)
+
+class RSAOAEPMechanism(Mechanism):
+    def __init__(self, hashAlg, mgf, label=None):
+        param = ck_rsa_pkcs_oaep_params(hashAlg, mgf, CKZ_DATA_SPECIFIED)
+        self.label = label
+        if label:
+            param.source_data = byref(label)
+            param.source_data_len = len(label)
+        self._param = param
+        super().__init__(CKM_RSA_PKCS_OAEP, addressof(param), sizeof(param))
+
+class RSA_PSS_Mechanism(Mechanism):
+    def __init__(self, mecha, hashAlg, mgf, sLen):
+        param = ck_rsa_pkcs_pss_params(hashAlg, mgf, sLen)
+        self._param = param
+        super().__init__(mecha, addressof(param), sizeof(param))
+
+class ECDH1_DERIVE_Mechanism(Mechanism):
+    def __init__(self, publicData, kdf = CKD_NULL, sharedData = None):
+        if sharedData is not None:
+            sharedData = buffer(sharedData)
+            sharedDataPtr = addressof(sharedData)
+            sharedDataLen = len(sharedData)
+        else:
+            sharedDataPtr = None
+            sharedDataLen = 0
+        publicData = buffer(publicData)
+        param = ck_ecdh1_derive_params(kdf, sharedDataLen, sharedDataPtr, len(publicData), addressof(publicData))
+        self._param = param
+        self._sharedData = sharedData
+        self._publicData = publicData
+        super().__init__(CKM_ECDH1_DERIVE, addressof(param), sizeof(param))
+
+class AES_GCM_Mechanism(Mechanism):
+    def __init__(self, iv, aad, tagBits):
+        #void *pIv;
+        #unsigned long ulIvLen;
+        #unsigned long ulIvBits;
+        #void *pAAD;
+        #unsigned long ulAADLen;
+        #unsigned long ulTagBits;
+        self._source_iv = buffer(iv)
+        self._source_aad = buffer(aad)
+        ivbits = 0
+        self._param = param = ck_gcm_params(
+            addressof(self._source_iv), len(self._source_iv), ivbits,
+            addressof(self._source_aad), len(self._source_aad), tagBits
+        )
+        super().__init__(CKM_AES_GCM, addressof(param), sizeof(param))

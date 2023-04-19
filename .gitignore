@@ -17,3 +17,6 @@ __pycache__/
 /samples/pdf-signed-ctpkcs11.pdf
 /samples/softhsm2/
 /samples/softhsm2.conf
+
+/tests/softhsm2
+/tests/softhsm2.conf

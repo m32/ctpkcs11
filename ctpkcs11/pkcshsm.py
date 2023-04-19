@@ -2,34 +2,58 @@
 import ctypes as ct
 from . import pkcsapi, pkcspacking
 
+
 class HSMError(Exception):
-    def __init__(self, rc,  func):
+    def __init__(self, rc, func):
         self.rc = rc
         self.func = func
+
     def __repr__(self):
-        return 'HSMError: function:{} error:{}({})'.format(self.func, self.rc, pkcsapi.CKR.get(self.rc, 'unknown'))
+        return "HSMError: function:{} error:{}({})".format(self.func, self.rc, pkcsapi.CKR.get(self.rc, "unknown"))
+
     __str__ = __repr__
 
-MechanismSHA1 = pkcsapi.Mechanism(pkcsapi.CKM_SHA_1)
-MechanismRSAPKCS1 = pkcsapi.Mechanism(pkcsapi.CKM_RSA_PKCS)
-MechanismRSAGENERATEKEYPAIR = pkcsapi.Mechanism(pkcsapi.CKM_RSA_PKCS_KEY_PAIR_GEN)
-MechanismECGENERATEKEYPAIR = pkcsapi.Mechanism(pkcsapi.CKM_EC_KEY_PAIR_GEN)
-MechanismAESGENERATEKEY = pkcsapi.Mechanism(pkcsapi.CKM_AES_KEY_GEN)
 
-def buffer(data):
-    if type(data) == int:
-        bdata = ct.create_string_buffer(data)
-    else:
-        bdata = ct.create_string_buffer(len(data))
-        bdata.value = data
-    return bdata
+class DigestSession(object):
+    def __init__(self, hsm, hsession, mecha):
+        self.hsm = hsm
+        self.hsession = hsession
+        rc = self.hsm.funcs.C_DigestInit(self.hsession, ct.byref(mecha))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_DigestInit")
+
+    def update(self, data):
+        data1 = pkcsapi.buffer(data)
+        rc = self.hsm.funcs.C_DigestUpdate(self.hsession, ct.byref(data1), len(data1))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_DigestUpdate")
+        return self
+
+    def digestKey(self, handle):
+        rc = self.hsm.funcs.C_DigestKey(self.hsession, handle)
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_DigestKey")
+        return self
+
+    def final(self):
+        ddatalen = ct.c_ulong(0)
+        # Get the size of the digest
+        rc = self.hsm.funcs.C_DigestFinal(self.hsession, None, ct.byref(ddatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_DigestFinal")
+        # Get the actual digest
+        ddata = pkcsapi.buffer(ddatalen.value)
+        rc = self.hsm.funcs.C_DigestFinal(self.hsession, ct.byref(ddata), ct.byref(ddatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_DigestFinal")
+        return bytes(ddata)
 
 class Session:
     def __init__(self, hsm, hsession):
         self.hsm = hsm
         self.hsession = hsession
 
-    def closeSession(self):
+    def close(self):
         rc = self.hsm.funcs.C_CloseSession(self.hsession)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_CloseSession")
@@ -38,7 +62,7 @@ class Session:
 
     def login(self, pin, user_type=pkcsapi.CKU_USER):
         if type(pin) == str:
-            pin = pin.encode('utf8')
+            pin = pin.encode("utf8")
         rc = self.hsm.funcs.C_Login(self.hsession, user_type, pin, len(pin))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Login")
@@ -48,21 +72,34 @@ class Session:
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Logout")
 
+    def setPin(self, old_pin, new_pin):
+        if type(old_pin) == str:
+            old_pin = old_pin.encode("utf8")
+        if type(new_pin) == str:
+            new_pin = new_pin.encode("utf8")
+        rc = self.hsm.funcs.C_SetPIN(self.hsession, old_pin, len(old_pin), new_pin, len(new_pin))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_SetPIN")
+
     def initPin(self, pin):
-        pin = pin.encode('utf8')
+        if type(pin) == str:
+            pin = pin.encode("utf8")
         rc = self.hsm.funcs.C_InitPIN(self.hsession, pin, len(pin))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_InitPIN")
 
-    def generateKeyPair(self, templatePub, templatePriv, mecha=MechanismRSAGENERATEKEYPAIR):
+    def generateKeyPair(self, templatePub, templatePriv, mecha=pkcsapi.MechanismRSAGENERATEKEYPAIR):
         rpuattr, rpubuf = pkcspacking.pack(templatePub)
         rprattr, rprbuf = pkcspacking.pack(templatePriv)
         ck_pub_handle = pkcsapi.ck_object_handle_t()
         ck_prv_handle = pkcsapi.ck_object_handle_t()
         rc = self.hsm.funcs.C_GenerateKeyPair(
-            self.hsession, mecha,
-            rpuattr, len(rpuattr),
-            rprattr, len(rprattr),
+            self.hsession,
+            mecha,
+            rpuattr,
+            len(rpuattr),
+            rprattr,
+            len(rprattr),
             ct.byref(ck_pub_handle),
             ct.byref(ck_prv_handle),
         )
@@ -109,7 +146,7 @@ class Session:
                 raise HSMError(rc, "C_FindObjectsFinal")
         return result
 
-    def getAttributeValue(self, handle, attrs):
+    def getAttributeValue(self, handle, attrs, allAsBinary=False):
         def getbuf(n):
             class U(ct.Union):
                 _fields_ = (
@@ -140,30 +177,76 @@ class Session:
             result.append(v)
         return result
 
-    def sign(self, privKey, data, mech=MechanismRSAPKCS1):
-        rc = self.hsm.funcs.C_SignInit(self.hsession, ct.byref(mech), privKey)
+    def generateKey(self, template, mecha=pkcsapi.MechanismAESGENERATEKEY):
+        attrs, attrsbuf = pkcspacking.pack(template)
+        handle = pkcsapi.ck_object_handle_t()
+        rc = self.hsm.funcs.C_GenerateKey(self.hsession, ct.byref(mecha), ct.byref(attrs), len(attrs), ct.byref(handle))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, 'C_GenerateKey')
+        return handle.value
+
+    def wrapKey(self, wrappingKey, key, mecha=pkcsapi.MechanismRSAPKCS1):
+        wraplen = ct.c_ulong(0)
+        rc = self.hsm.funcs.C_WrapKey(self.hsession, ct.byref(mecha), wrappingKey, key, None, ct.byref(wraplen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, 'C_WrapKey')
+        wrapped = pkcsapi.buffer(wraplen.value)
+        rc = self.hsm.funcs.C_WrapKey(
+            self.hsession, ct.byref(mecha), wrappingKey, key, ct.byref(wrapped), ct.byref(wraplen)
+        )
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, 'C_WrapKey')
+        return bytes(wrapped)
+
+    def unwrapKey(self, unwrappingKey, wrappedKey, template, mecha=pkcsapi.MechanismRSAPKCS1):
+        attrs, attrsbuf = pkcspacking.pack(template)
+        handle = pkcsapi.ck_object_handle_t()
+        wrapped = pkcsapi.buffer(wrappedKey)
+        rc = self.hsm.funcs.C_UnwrapKey(
+            self.hsession,
+            ct.byref(mecha),
+            unwrappingKey,
+            ct.byref(wrapped),
+            len(wrapped),
+            attrs,
+            len(attrs),
+            ct.byref(handle),
+        )
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, 'C_UnwrapKey')
+        return handle.value
+
+    def deriveKey(self, baseKey, template, mecha):
+        attrs, attrsbuf = pkcspacking.pack(template)
+        handle = pkcsapi.ck_object_handle_t()
+        rc = self.hsm.funcs.C_DeriveKey(
+            self.hsession, ct.byref(mecha), baseKey, ct.byref(attrs), len(attrs), ct.byref(handle)
+        )
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, 'C_DeriveKey')
+        return handle.value
+
+    def sign(self, privKey, data, mecha=pkcsapi.MechanismRSAPKCS1):
+        rc = self.hsm.funcs.C_SignInit(self.hsession, ct.byref(mecha), privKey)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_SignInit")
-        datasig = buffer(data)
+        datasig = pkcsapi.buffer(data)
         siglen = ct.c_ulong(0)
-        # first call get signature size
         rc = self.hsm.funcs.C_Sign(self.hsession, ct.byref(datasig), len(data), None, ct.byref(siglen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Sign")
-        # second call get actual signature data
-        signature = buffer(siglen.value)
+        signature = pkcsapi.buffer(siglen.value)
         rc = self.hsm.funcs.C_Sign(self.hsession, ct.byref(datasig), len(data), ct.byref(signature), ct.byref(siglen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Sign")
-        #return bytearray(signature)
         return bytes(signature)
 
-    def verify(self, key, data, signature, mech=MechanismRSAPKCS1):
-        rc = self.hsm.funcs.C_VerifyInit(self.hsession, ct.byref(mech), key)
+    def verify(self, key, data, signature, mecha=pkcsapi.MechanismRSAPKCS1):
+        rc = self.hsm.funcs.C_VerifyInit(self.hsession, ct.byref(mecha), key)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_VerifyInit")
-        bdata = buffer(data)
-        bsignature = buffer(signature)
+        bdata = pkcsapi.buffer(data)
+        bsignature = pkcsapi.buffer(signature)
         rc = self.hsm.funcs.C_Verify(self.hsession, ct.byref(bdata), len(data), ct.byref(bsignature), len(signature))
         if rc == pkcsapi.CKR_OK:
             return True
@@ -171,42 +254,87 @@ class Session:
             return False
         raise HSMError(rc, "C_Verify")
 
-    def encrypt(self, key, data, mech=MechanismRSAPKCS1):
-        rc = self.hsm.funcs.C_EncryptInit(self.hsession, ct.byref(mech), key)
+    def encrypt(self, key, data, mecha=pkcsapi.MechanismRSAPKCS1):
+        rc = self.hsm.funcs.C_EncryptInit(self.hsession, ct.byref(mecha), key)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_EncryptInit")
-        bdata = buffer(data)
+        bdata = pkcsapi.buffer(data)
         edatalen = ct.c_ulong(0)
         rc = self.hsm.funcs.C_Encrypt(self.hsession, ct.byref(bdata), len(bdata), None, ct.byref(edatalen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Encrypt")
-        edata = buffer(edatalen.value)
+        edata = pkcsapi.buffer(edatalen.value)
         rc = self.hsm.funcs.C_Encrypt(self.hsession, ct.byref(bdata), len(bdata), ct.byref(edata), ct.byref(edatalen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Encrypt")
         return bytes(edata)
 
-    def decrypt(self, key, data, mech=MechanismRSAPKCS1):
-        rc = self.hsm.funcs.C_DecryptInit(self.hsession, ct.byref(mech), key)
+    def decrypt(self, key, data, mecha=pkcsapi.MechanismRSAPKCS1):
+        rc = self.hsm.funcs.C_DecryptInit(self.hsession, ct.byref(mecha), key)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_DecryptInit")
-        bdata = buffer(data)
+        bdata = pkcsapi.buffer(data)
         ddatalen = ct.c_ulong(0)
         rc = self.hsm.funcs.C_Decrypt(self.hsession, ct.byref(bdata), len(bdata), None, ct.byref(ddatalen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Decrypt")
-        ddata = buffer(ddatalen.value)
+        ddata = pkcsapi.buffer(ddatalen.value)
         rc = self.hsm.funcs.C_Decrypt(self.hsession, ct.byref(bdata), len(bdata), ct.byref(ddata), ct.byref(ddatalen))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_Decrypt")
-        return bytes(ddata[:ddatalen.value])
+        return bytes(ddata[: ddatalen.value])
 
-    def displaySessionInfo(self):
+    def digestSession(self, mecha=pkcsapi.MechanismSHA1):
+        return DigestSession(self.hsm, self.hsession, mecha)
+        
+    def digest(self, data, mecha=pkcsapi.MechanismSHA1):
+        rc = self.hsm.funcs.C_DigestInit(self.hsession, ct.byref(mecha))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_DigestInit")
+        data1 = pkcsapi.buffer(data)
+        ddatalen = ct.c_ulong(0)
+        # first call get digest size
+        rc = self.hsm.funcs.C_Digest(self.hsession, ct.byref(data1), len(data1), None, ct.byref(ddatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_Digest")
+        ddata = pkcsapi.buffer(ddatalen.value)
+        # second call get actual digest data
+        rc = self.hsm.funcs.C_Digest(self.hsession, ct.byref(data1), len(data1), ct.byref(ddata), ct.byref(ddatalen))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_Digest")
+        return bytes(ddata)
+
+    def seedRandom(self, seed):
+        ctseed = pkcsapi.buffer(seed)
+        rc = self.hsm.funcs.C_SeedRandom(self.hsession, ct.byref(ctseed), len(seed))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_SeedRandom")
+
+    def generateRandom(self, size=16):
+        ctrand = pkcsapi.buffer(size)
+        rc = self.hsm.funcs.C_GenerateRandom(self.hsession, ct.byref(ctrand), size)
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_GenerateRandom")
+        return bytes(ctrand)
+
+    def getSessionInfo(self):
         sessioninfo = pkcsapi.ck_session_info()
         rc = self.hsm.funcs.C_GetSessionInfo(self.hsession, ct.byref(sessioninfo))
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_GetSessionInfo")
+        class Info:
+            slotID = sessioninfo.slot_id
+            state = sessioninfo.state
+            flags = sessioninfo.flags
+            ulDeviceError = sessioninfo.device_error
+        return Info()
+
+
+    def displaySessionInfo(self):
+        sessioninfo = self.getSessionInfo()
         print(
-            "\tC_GetSessionInfo={0} slot_id={1}, state={2} flags={3}, device_error={4}".format(
-                rc, sessioninfo.slot_id, sessioninfo.state, sessioninfo.flags, sessioninfo.device_error
+            "\tC_GetSessionInfo: slot_id={}, state={} flags={}, device_error={}".format(
+                sessioninfo.slotID, sessioninfo.state, sessioninfo.flags, sessioninfo.ulDeviceError
             )
         )
 
@@ -244,8 +372,8 @@ class HSM:
         return slot_list
 
     def initToken(self, slot, sopin, label):
-        sopin = sopin.encode('utf8')
-        label = label.encode('utf8')
+        sopin = sopin.encode("utf8")
+        label = label.encode("utf8")
         rc = self.funcs.C_InitToken(slot, sopin, len(sopin), label)
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_InitToken")
@@ -255,22 +383,39 @@ class HSM:
         rc = self.funcs.C_GetTokenInfo(slot, ct.byref(tokeninfo))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_GetTokenInfo")
-        class Info:
-            pass
-        info = Info()
-        for fname, ftype in tokeninfo._fields_:
-            data =  getattr(tokeninfo, fname)
-            if fname in ('label', 'manufacturer_id', 'model', 'serial_number', 'utc_time'):
-                data = bytes(data).decode("ascii")
-                data = data.replace('\0', ' ').strip()
-            elif fname in ('max_session_count', 'session_count', 'max_rw_session_count', 'rw_session_count', 'total_public_memory', 'free_public_memory', 'total_private_memory', 'free_private_memory'):
-                #if data == pkcsapi.CK_UNAVAILABLE_INFORMATION:
-                if data == 0xffffffffffffffff:
-                    data = -1
-            setattr(info, fname, data)
-        return info
 
-    def openSession(self, slot, flags=pkcsapi.CKF_SERIAL_SESSION|pkcsapi.CKF_RW_SESSION):
+        def strg(data):
+            data = bytes(data).decode("utf8")
+            data = data.replace("\0", " ").strip()
+            return data
+        def intg(data):
+            #if data == pkcsapi.CK_UNAVAILABLE_INFORMATION:
+            if data == 0xFFFFFFFFFFFFFFFF:
+                data = -1
+            return data
+
+        class Info:
+            label = strg(tokeninfo.label)
+            manufacturerID = strg(tokeninfo.manufacturer_id)
+            model = strg(tokeninfo.model)
+            serialNumber = strg(tokeninfo.serial_number)
+            flags = tokeninfo.flags
+            ulMaxSessionCount = intg(tokeninfo.max_session_count)
+            ulSessionCount = intg(tokeninfo.session_count)
+            ulMaxRwSessionCount = intg(tokeninfo.max_rw_session_count)
+            ulRwSessionCount = intg(tokeninfo.rw_session_count)
+            ulMaxPinLen = tokeninfo.max_pin_len
+            ulMinPinLen = tokeninfo.min_pin_len
+            ulTotalPublicMemory = intg(tokeninfo.total_public_memory)
+            ulFreePublicMemory = intg(tokeninfo.free_public_memory)
+            ulTotalPrivateMemory = intg(tokeninfo.total_private_memory)
+            ulFreePrivateMemory = intg(tokeninfo.free_private_memory)
+            hardwareVersion = (tokeninfo.hardware_version.major, tokeninfo.hardware_version.minor)
+            firmwareVersion = (tokeninfo.firmware_version.major, tokeninfo.firmware_version.minor)
+            utcTime = strg(tokeninfo.utc_time)
+        return Info()
+
+    def openSession(self, slot, flags=pkcsapi.CKF_SERIAL_SESSION | pkcsapi.CKF_RW_SESSION):
         hsession = pkcsapi.ck_session_handle_t()
         rc = self.funcs.C_OpenSession(
             slot,
@@ -283,26 +428,31 @@ class HSM:
             raise HSMError(rc, "C_OpenSession")
         return Session(self, hsession)
 
+    def closeAllSessions(self, slot):
+        rc = self.funcs.C_CloseAllSessions(slot)
+        if rc != pkcsapi.CKR_OK:
+            raise HSMError(rc, "C_OpenSession")
+
     def getMechanismList(self, slot):
         nmech = ct.c_ulong(0)
         rc = self.funcs.C_GetMechanismList(slot, None, ct.byref(nmech))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_GetMechanismList")
-        mechs = (pkcsapi.ck_mechanism_type_t*nmech.value)()
+        mechs = (pkcsapi.ck_mechanism_type_t * nmech.value)()
         rc = self.funcs.C_GetMechanismList(slot, ct.byref(mechs), ct.byref(nmech))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_GetMechanismList")
         result = []
         for mechanism in mechs:
             if mechanism >= pkcsapi.CKM_VENDOR_DEFINED:
-                k = 'CKM_VENDOR_DEFINED_0x%X' % (mechanism - pkcsapi.CKM_VENDOR_DEFINED)
+                k = "CKM_VENDOR_DEFINED_0x%X" % (mechanism - pkcsapi.CKM_VENDOR_DEFINED)
                 pkcsapi.CKM[k] = mechanism
                 pkcsapi.CKM[mechanism] = k
             else:
                 try:
                     k = pkcsapi.CKM[mechanism]
                 except KeyError:
-                    k = 'CKM_UNKNOWN_0x%X' % mechanism
+                    k = "CKM_UNKNOWN_0x%X" % mechanism
                     pkcsapi.CKM[mechanism] = k
                     pkcsapi.CKM[k] = mechanism
             result.append(mechanism)
@@ -315,52 +465,73 @@ class HSM:
             raise HSMError(rc, "C_GetMechanismInfo")
         return info
 
-    def displayInfo(self):
-        print("Info for: {}".format(self.dllpath))
-        print("\tfunctions version: {0}.{1}".format(self.funcs.version.major, self.funcs.version.minor))
+    def getInfo(self):
         info = pkcsapi.ck_info()
         rc = self.funcs.C_GetInfo(ct.byref(info))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_GetInfo")
-        print("\tversion: {0}.{1}".format(info.cryptoki_version.major, info.cryptoki_version.minor))
-        print("\tmanufacturer:", bytes(info.manufacturer_id).decode("ascii").strip())
-        print("\tflags:", info.flags)
-        print("\tdescription:", bytes(info.library_description).decode("ascii").strip())
-        print("\tlibrary version: {0}.{1}".format(info.library_version.major, info.library_version.minor))
 
-    def displaySlotInfo(self, slot):
+        class Info:
+            cryptokiVersion = (info.cryptoki_version.major, info.cryptoki_version.minor)
+            manufacturerID = bytes(info.manufacturer_id).decode("ascii").strip()
+            flags = info.flags
+            libraryDescription = bytes(info.library_description).decode("ascii").strip()
+            libraryVersion = (info.library_version.major, info.library_version.minor)
+        return Info()
+
+    def displayInfo(self):
+        print("Info for: {}".format(self.dllpath))
+        print("\tfunctions version: {0}.{1}".format(self.funcs.version.major, self.funcs.version.minor))
+        info = self.getInfo()
+        print("\tversion: {0}.{1}".format(info.cryptokiVersion[0], info.cryptokiVersion[1]))
+        print("\tmanufacturer:", info.manufacturerID)
+        print("\tflags:", info.flags)
+        print("\tdescription:", info.libraryDescription)
+        print("\tlibrary version: {0}.{1}".format(info.libraryVersion[0], info.libraryVersion[1]))
+
+    def getSlotInfo(self, slot):
         slotinfo = pkcsapi.ck_slot_info()
         rc = self.funcs.C_GetSlotInfo(slot, ct.byref(slotinfo))
         if rc != pkcsapi.CKR_OK:
             raise HSMError(rc, "C_GetSlotInfo")
+        class Info:
+            slotDescription = bytes(slotinfo.slot_description).decode("ascii").strip()
+            manufacturerID = bytes(slotinfo.manufacturer_id).decode("ascii").strip()
+            flags = slotinfo.flags
+            hardwareVersion = (slotinfo.hardware_version.major, slotinfo.hardware_version.minor)
+            firmwareVersion = (slotinfo.firmware_version.major, slotinfo.firmware_version.minor)
+        return Info()
+
+    def displaySlotInfo(self, slot):
+        info = self.getSlotInfo(slot)
         print("\tSlot number:{}".format(slot))
-        print("\t\tDescription:", bytes(slotinfo.slot_description).decode("ascii").strip())
-        print("\t\tManufacturer_id:", bytes(slotinfo.manufacturer_id).decode("ascii").strip())
-        print("\t\tFlags:", slotinfo.flags)
-        print("\t\tHardware version: {0}.{1}".format(slotinfo.hardware_version.major, slotinfo.hardware_version.minor))
-        print("\t\tFirmware version: {0}.{1}".format(slotinfo.firmware_version.major, slotinfo.firmware_version.minor))
+        print("\t\tDescription:", info.slotDescription)
+        print("\t\tManufacturer_id:", info.manufacturerID)
+        print("\t\tFlags:", info.flags)
+        print("\t\tHardware version: {0}.{1}".format(info.hardwareVersion[0], info.hardwareVersion[1]))
+        print("\t\tFirmware version: {0}.{1}".format(info.firmwareVersion[0], info.firmwareVersion[1]))
 
     def displayTokenInfo(self, slot):
         info = self.getTokenInfo(slot)
         print("\tToken:")
         print("\t\tlabel:", info.label)
-        print("\t\tmanufacturer:",info.manufacturer_id)
+        print("\t\tmanufacturer:", info.manufacturerID)
         print("\t\tmodel:", info.model)
-        print("\t\tserial:", info.serial_number)
+        print("\t\tserial:", info.serialNumber)
         print("\t\tflags:", info.flags)
-        print("\t\tmax_session_count:", info.max_session_count, hex(info.max_session_count))
-        print("\t\tsession_count:", info.session_count)
-        print("\t\tmax_rw_session_count:", info.max_rw_session_count)
-        print("\t\trw_session_count:", info.rw_session_count)
-        print("\t\tmax_pin_len:", info.max_pin_len)
-        print("\t\tmin_pin_len:", info.min_pin_len)
-        print("\t\ttotal_public_memory:", info.total_public_memory)
-        print("\t\tfree_public_memory:", info.free_public_memory)
-        print("\t\ttotal_private_memory:", info.total_private_memory)
-        print("\t\tfree_private_memory:", info.free_private_memory)
-        print("\t\thardware: {0}.{1}".format(info.hardware_version.major, info.hardware_version.minor))
-        print("\t\tfirmware: {0}.{1}".format(info.firmware_version.major, info.firmware_version.minor))
-        print("\t\ttime:", info.utc_time)
+        print("\t\tmax_session_count:", info.ulMaxSessionCount, hex(info.ulMaxSessionCount))
+        print("\t\tsession_count:", info.ulSessionCount)
+        print("\t\tmax_rw_session_count:", info.ulMaxRwSessionCount)
+        print("\t\trw_session_count:", info.ulRwSessionCount)
+        print("\t\tmax_pin_len:", info.ulMaxPinLen)
+        print("\t\tmin_pin_len:", info.ulMinPinLen)
+        print("\t\ttotal_public_memory:", info.ulTotalPublicMemory)
+        print("\t\tfree_public_memory:", info.ulFreePublicMemory)
+        print("\t\ttotal_private_memory:", info.ulTotalPrivateMemory)
+        print("\t\tfree_private_memory:", info.ulFreePrivateMemory)
+        print("\t\thardware: {0}.{1}".format(info.hardwareVersion[0], info.hardwareVersion[1]))
+        print("\t\tfirmware: {0}.{1}".format(info.firmwareVersion[0], info.firmwareVersion[1]))
+        print("\t\ttime:", info.utcTime)
         return True
 
     def displaySlots(self, tokenpresent, pin):
@@ -382,7 +553,7 @@ class HSM:
                 finally:
                     session.logout()
             finally:
-                session.closeSession()
+                session.close()
 
     def displaySlotObjects(self, hsession):
         print("\tObjects:")
@@ -393,12 +564,10 @@ class HSM:
         maxobj = pkcsapi.c_ulong(0)
         try:
             while True:
-                rc = self.funcs.C_FindObjects(
-                    hsession, ct.byref(SearchResult), len(SearchResult), ct.byref(maxobj)
-                )
+                rc = self.funcs.C_FindObjects(hsession, ct.byref(SearchResult), len(SearchResult), ct.byref(maxobj))
                 if rc != pkcsapi.CKR_OK or maxobj.value == 0:
                     break
-                #if rc == pkcsapi.CKR_OK and maxobj.value > 0:
+                # if rc == pkcsapi.CKR_OK and maxobj.value > 0:
                 for i in range(maxobj.value):
                     self.displaySlotAttributes(hsession, SearchResult[i])
         finally:
@@ -408,6 +577,7 @@ class HSM:
 
     def displaySlotAttributes(self, hsession, hobject):
         print("\t\thobject=0x{:x}".format(hobject))
+
         def getbuf(n):
             class U(ct.Union):
                 _fields_ = (
@@ -423,11 +593,13 @@ class HSM:
         t = pkcsapi.ck_attribute(0, ct.addressof(buf), 0)
         # t.value = addressof(buf)
         disabledby = {
-            pkcsapi.CKR_ATTRIBUTE_SENSITIVE: 'sensitive',
-            pkcsapi.CKR_ATTRIBUTE_TYPE_INVALID: 'invalid type',
-            pkcsapi.CKR_ATTRIBUTE_VALUE_INVALID: 'invalid value',
+            pkcsapi.CKR_ATTRIBUTE_SENSITIVE: "sensitive",
+            pkcsapi.CKR_ATTRIBUTE_TYPE_INVALID: "invalid type",
+            pkcsapi.CKR_ATTRIBUTE_VALUE_INVALID: "invalid value",
         }
         for value, name in pkcsapi.CKA.items():
+            if type(value) == str:
+                continue
             t.type = value
             t.value_len = ct.sizeof(buf)
             rc = self.funcs.C_GetAttributeValue(hsession, hobject, ct.byref(t), 1)
@@ -441,9 +613,7 @@ class HSM:
                 continue
             if rc != pkcsapi.CKR_OK:
                 print(
-                    "\t\t\t====C_GetAttributeValue({})={:x} type:{} len:{}".format(
-                        name, rc, t.type, t.value_len
-                    ),
+                    "\t\t\t====C_GetAttributeValue({})={:x} type:{} len:{}".format(name, rc, t.type, t.value_len),
                 )
                 continue
             if t.value_len > ct.sizeof(buf):
@@ -458,11 +628,11 @@ class HSM:
                 tvalue = None
             print("\t\t\t{}({})=".format(name, t.type), end=" ")
             if value == pkcsapi.CKA_CLASS:
-                print('{} ({})'.format(pkcsapi.CKO[buf.cint], tvalue))
+                print("{} ({})".format(pkcsapi.CKO[buf.cint], tvalue))
             elif value == pkcsapi.CKA_CERTIFICATE_TYPE:
-                print('{} ({})'.format(pkcsapi.CKC[buf.cint], tvalue))
+                print("{} ({})".format(pkcsapi.CKC[buf.cint], tvalue))
             elif value == pkcsapi.CKA_KEY_TYPE:
-                print('{} ({})'.format(pkcsapi.CKK[buf.cint], tvalue))
+                print("{} ({})".format(pkcsapi.CKK[buf.cint], tvalue))
             else:
                 if tvalue is not None:
                     print(tvalue)
@@ -478,5 +648,5 @@ class HSM:
                         s = buf.cbyte[: t.value_len]
                         print(s, "(list)")
                     else:
-                        s= buf.cbyte[: t.value_len]
+                        s = buf.cbyte[: t.value_len]
                         print(s, "(bytes)")

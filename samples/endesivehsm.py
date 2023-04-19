@@ -62,7 +62,7 @@ class HSM(BaseHSM):
         session.login(sopin, user_type=ctpkcs11.api.CKU_SO)
         session.initPin(pin)
         session.logout()
-        session.closeSession()
+        session.close()
 
     def login(self, label, pin):
         slot = self.getSlot(label)
@@ -76,7 +76,7 @@ class HSM(BaseHSM):
     def logout(self):
         if self.session is not None:
             self.session.logout()
-            self.session.closeSession()
+            self.session.close()
             self.session = None
 
     def gen_privkey(self, label, key_id, key_length=2048):
@@ -344,7 +344,7 @@ class Signer(HSM):
     def logout(self):
         if self.session is not None:
             self.session.logout()
-            self.session.closeSession()
+            self.session.close()
             self.session = None
 
     def certificate(self, label, pin, keyid):

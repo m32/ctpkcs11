@@ -72,21 +72,46 @@ attrpackinfo = {
     pkcsapi.CKA_VERIFY_RECOVER: _bool,
     pkcsapi.CKA_WRAP: _bool,
     pkcsapi.CKA_WRAP_WITH_TRUSTED: _bool,
+    #
+    pkcsapi.CKA_GOSTR3410_PARAMS: _bytes,
+    pkcsapi.CKA_GOSTR3411_PARAMS: _bytes,
+    pkcsapi.CKA_HW_FEATURE_TYPE: _ulong,
 }
 
-def pack(attrs):
-    rattr = (pkcsapi.ck_attribute * len(attrs))()
-    offsets = []
-    buf = []
-    offset = 0
+def packlen(attrs):
+    n = 0
     for i in range(len(attrs)):
         a, v = attrs[i]
-        v = attrpackinfo[a][0](v)
-        buf.append(v)
-        offsets.append(offset)
-        rattr[i].type = a
-        rattr[i].value_len = len(v)
-        offset += len(v)
+        if a in (pkcsapi.CKA_UNWRAP_TEMPLATE, pkcsapi.CKA_WRAP_TEMPLATE):
+             n += packlen(v)
+        else:
+             n += 1
+    return n
+
+def packr(attrs, rattr, offsets, buf, offset, n):
+    for i in range(len(attrs)):
+        a, v = attrs[i]
+        if a in (pkcsapi.CKA_UNWRAP_TEMPLATE, pkcsapi.CKA_WRAP_TEMPLATE):
+            offset, n = packr(v, rattr, offsets, buf, offset, n)
+        else:
+            v = attrpackinfo[a][0](v)
+            buf.append(v)
+            offsets.append(offset)
+            rattr[n].type = a
+            rattr[n].value_len = len(v)
+            offset += len(v)
+            n += 1
+    return offset, n
+
+def pack(attrs):
+    n = packlen(attrs)
+    rattr = (pkcsapi.ck_attribute * n)()
+    offsets = []
+    buf = []
+
+    i = packr(attrs, rattr, offsets, buf, 0, 0)[1]
+    assert i == n
+
     buf = b''.join(buf)
     buf = ctypes.create_string_buffer(buf)
     l = ctypes.addressof(buf)
