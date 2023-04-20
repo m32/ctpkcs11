@@ -1,9 +1,4 @@
 #!/bin/sh
-set +x
-#
-# https://about.codecov.io/blog/python-code-coverage-using-github-actions-and-codecov/
-#
-#vpy3-pytest --cov=./endesive --cov-report=xml $*
 top=$(pwd)
 mkdir -p $top/tests/softhsm2
 SOFTHSM2_CONF=$top/tests/softhsm2.conf
