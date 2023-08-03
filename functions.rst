@@ -5,9 +5,9 @@
 + C_CreateObject
 + C_Decrypt
 - C_DecryptDigestUpdate
-- C_DecryptFinal
++ C_DecryptFinal
 + C_DecryptInit
-- C_DecryptUpdate
++ C_DecryptUpdate
 - C_DecryptVerifyUpdate
 + C_DeriveKey
 + C_DestroyObject
@@ -18,9 +18,9 @@
 - C_DigestKey
 + C_DigestUpdate
 + C_Encrypt
-- C_EncryptFinal
++ C_EncryptFinal
 + C_EncryptInit
-- C_EncryptUpdate
++ C_EncryptUpdate
 + C_Finalize
 + C_FindObjects
 + C_FindObjectsFinal
@@ -66,4 +66,4 @@
 - C_VerifyUpdate
 - C_WaitForSlotEvent
 + C_WrapKey
-+ version
+- version
