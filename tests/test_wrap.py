@@ -1,55 +1,15 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
-    def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
-
-        # get SoftHSM major version
-        self.SoftHSMversion = self.pkcs11.getInfo().libraryVersion[0]
-
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
-        self.session = self.pkcs11.openSession(self.slot, api.CKF_SERIAL_SESSION | api.CKF_RW_SESSION)
-        self.session.login(os.environ["PKCS11_TOKEN_PIN"])
-
-    def tearDown(self):
-        self.session.logout()
-        self.session.close()
-        self.pkcs11.closeAllSessions(self.slot)
-        self.pkcs11.close()
-        del self.pkcs11
-
+class TestUtil(TestCase):
     def test_wrapKey(self):
-        keyID = (0x01,)
-        AESKeyTemplate = [
-            (api.CKA_CLASS, api.CKO_SECRET_KEY),
-            (api.CKA_KEY_TYPE, api.CKK_AES),
-            (api.CKA_TOKEN, api.CK_TRUE),
-            (api.CKA_PRIVATE, api.CK_FALSE),
-            (api.CKA_ENCRYPT, api.CK_TRUE),
-            (api.CKA_DECRYPT, api.CK_TRUE),
-            (api.CKA_SIGN, api.CK_FALSE),
-            (api.CKA_EXTRACTABLE, api.CK_TRUE),
-            (api.CKA_VERIFY, api.CK_FALSE),
-            (api.CKA_VALUE_LEN, 32),
-            (api.CKA_LABEL, "TestAESKey"),
-            (api.CKA_ID, keyID),
-        ]
-
-        if self.SoftHSMversion < 2:
-            self.skipTest("generateKey() only supported by SoftHSM >= 2")
-
-        self.wrapKey = self.session.generateKey(AESKeyTemplate)
+        self.wrapKey = self.createAESKey(0x01)
         self.assertIsNotNone(self.wrapKey)
 
-        keyID = (0x02,)
-        # make the key extractable
-        AESKeyTemplate.append((api.CKA_EXTRACTABLE, api.CK_TRUE))
-
-        self.AESKey = self.session.generateKey(AESKeyTemplate)
+        self.AESKey = self.createAESKey(0x02, extractable=True)
         self.assertIsNotNone(self.AESKey)
 
         # buffer of 32 bytes 0x42
@@ -99,59 +59,11 @@ class TestUtil(unittest.TestCase):
         self.session.destroyObject(self.wrapKey)
 
     def test_wrapKey_OAEP(self):
-        if self.SoftHSMversion < 2:
-            self.skipTest("generateKey() only supported by SoftHSM >= 2")
-
-        keyID = (0x22,)
-        pubTemplate = [
-            (api.CKA_CLASS, api.CKO_PUBLIC_KEY),
-            (api.CKA_TOKEN, api.CK_TRUE),
-            (api.CKA_PRIVATE, api.CK_FALSE),
-            (api.CKA_MODULUS_BITS, 0x0400),
-            (api.CKA_PUBLIC_EXPONENT, (0x01, 0x00, 0x01)),
-            (api.CKA_ENCRYPT, api.CK_TRUE),
-            (api.CKA_VERIFY, api.CK_TRUE),
-            (api.CKA_VERIFY_RECOVER, api.CK_TRUE),
-            (api.CKA_WRAP, api.CK_TRUE),
-            (api.CKA_LABEL, "My Public Key"),
-            (api.CKA_ID, keyID),
-        ]
-
-        privTemplate = [
-            (api.CKA_CLASS, api.CKO_PRIVATE_KEY),
-            (api.CKA_TOKEN, api.CK_TRUE),
-            (api.CKA_PRIVATE, api.CK_TRUE),
-            (api.CKA_DECRYPT, api.CK_TRUE),
-            (api.CKA_SIGN, api.CK_TRUE),
-            (api.CKA_SIGN_RECOVER, api.CK_TRUE),
-            (api.CKA_UNWRAP, api.CK_TRUE),
-            (api.CKA_ID, keyID),
-        ]
-
-        self.pubKey, self.privKey = self.session.generateKeyPair(pubTemplate, privTemplate)
+        self.pubKey, self.privKey = self.createRSAKey(0x1)
         self.assertIsNotNone(self.pubKey)
         self.assertIsNotNone(self.privKey)
 
-        keyID = (0x02,)
-        AESKeyTemplate = [
-            (api.CKA_CLASS, api.CKO_SECRET_KEY),
-            (api.CKA_KEY_TYPE, api.CKK_AES),
-            (api.CKA_TOKEN, api.CK_TRUE),
-            (api.CKA_PRIVATE, api.CK_FALSE),
-            (api.CKA_ENCRYPT, api.CK_TRUE),
-            (api.CKA_DECRYPT, api.CK_TRUE),
-            (api.CKA_SIGN, api.CK_FALSE),
-            (api.CKA_EXTRACTABLE, api.CK_TRUE),
-            (api.CKA_VERIFY, api.CK_FALSE),
-            (api.CKA_VALUE_LEN, 32),
-            (api.CKA_LABEL, "TestAESKey"),
-            (api.CKA_ID, keyID),
-        ]
-
-        # make the key extractable
-        AESKeyTemplate.append((api.CKA_EXTRACTABLE, api.CK_TRUE))
-
-        self.AESKey = self.session.generateKey(AESKeyTemplate)
+        self.AESKey = self.createAESKey(0x02, extractable=True)
         self.assertIsNotNone(self.AESKey)
 
         # buffer of 32 bytes 0x42
@@ -202,7 +114,7 @@ class TestUtil(unittest.TestCase):
         self.session.destroyObject(self.privKey)
 
     def test_wrapKey_UNWRAP_TEMPLATE(self):
-        keyID = (0x01,)
+        keyID = 0x01
         pubTemplate = [
             (api.CKA_CLASS, api.CKO_PUBLIC_KEY),
             (api.CKA_LABEL, "RSA Public Key"),
@@ -232,33 +144,14 @@ class TestUtil(unittest.TestCase):
             (api.CKA_UNWRAP_TEMPLATE, unwrap_template),
         ]
 
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("generateKey() only supported by SoftHSM >= 2")
 
         self.pubKey, self.privKey = self.session.generateKeyPair(pubTemplate, privTemplate)
         self.assertIsNotNone(self.pubKey)
         self.assertIsNotNone(self.privKey)
 
-        keyID = (0x02,)
-        AESKeyTemplate = [
-            (api.CKA_CLASS, api.CKO_SECRET_KEY),
-            (api.CKA_KEY_TYPE, api.CKK_AES),
-            (api.CKA_TOKEN, api.CK_TRUE),
-            (api.CKA_PRIVATE, api.CK_FALSE),
-            (api.CKA_ENCRYPT, api.CK_TRUE),
-            (api.CKA_DECRYPT, api.CK_TRUE),
-            (api.CKA_SIGN, api.CK_FALSE),
-            (api.CKA_EXTRACTABLE, api.CK_TRUE),
-            (api.CKA_VERIFY, api.CK_FALSE),
-            (api.CKA_VALUE_LEN, 32),
-            (api.CKA_LABEL, "TestAESKey"),
-            (api.CKA_ID, keyID),
-        ]
-
-        # make the key extractable
-        AESKeyTemplate.append((api.CKA_EXTRACTABLE, api.CK_TRUE))
-
-        self.AESKey = self.session.generateKey(AESKeyTemplate)
+        self.AESKey = self.createAESKey(0x02, extractable=True)
         self.assertIsNotNone(self.AESKey)
 
         # buffer of 32 bytes 0x42
@@ -306,3 +199,8 @@ class TestUtil(unittest.TestCase):
 
         self.session.destroyObject(self.pubKey)
         self.session.destroyObject(self.privKey)
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

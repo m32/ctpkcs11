@@ -1,9 +1,10 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM, HSMError
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
+class TestUtil(TestCase):
     def test_CKM(self):
         self.assertEqual(api.CKM_RSA_PKCS_KEY_PAIR_GEN, 0x00000000)
         self.assertEqual(
@@ -18,3 +19,9 @@ class TestUtil(unittest.TestCase):
     def test_CKH(self):
         self.assertEqual(api.CKH_USER_INTERFACE, 3)
         self.assertEqual(api.CKH['CKH_USER_INTERFACE'], 3)
+
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

@@ -1,53 +1,18 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM, HSMError
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
+class TestUtil(TestCase):
     def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
+        super().setUp()
 
         # get SoftHSM major version
         info = self.pkcs11.getInfo()
-        self.SoftHSMversion = info.libraryVersion[0]
         self.manufacturer = info.manufacturerID
 
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
-        self.session = self.pkcs11.openSession(
-            self.slot, api.CKF_SERIAL_SESSION | api.CKF_RW_SESSION
-        )
-        self.session.login("1234")
-
-        keyID = (0x22,)
-        pubTemplate = [
-            (api.CKA_CLASS, api.CKO_PUBLIC_KEY),
-            (api.CKA_TOKEN, api.CK_TRUE),
-            (api.CKA_PRIVATE, api.CK_FALSE),
-            (api.CKA_MODULUS_BITS, 0x0400),
-            (api.CKA_PUBLIC_EXPONENT, (0x01, 0x00, 0x01)),
-            (api.CKA_ENCRYPT, api.CK_TRUE),
-            (api.CKA_VERIFY, api.CK_TRUE),
-            (api.CKA_VERIFY_RECOVER, api.CK_TRUE),
-            (api.CKA_WRAP, api.CK_TRUE),
-            (api.CKA_LABEL, "My Public Key"),
-            (api.CKA_ID, keyID),
-        ]
-
-        privTemplate = [
-            (api.CKA_CLASS, api.CKO_PRIVATE_KEY),
-            (api.CKA_TOKEN, api.CK_TRUE),
-            (api.CKA_PRIVATE, api.CK_TRUE),
-            (api.CKA_DECRYPT, api.CK_TRUE),
-            (api.CKA_SIGN, api.CK_TRUE),
-            (api.CKA_SIGN_RECOVER, api.CK_TRUE),
-            (api.CKA_UNWRAP, api.CK_TRUE),
-            (api.CKA_ID, keyID),
-        ]
-
-        (self.pubKey, self.privKey) = self.session.generateKeyPair(
-            pubTemplate, privTemplate
-        )
+        self.pubKey, self.privKey = self.createRSAKey(0x22)
         self.assertIsNotNone(self.pubKey)
         self.assertIsNotNone(self.privKey)
 
@@ -55,11 +20,7 @@ class TestUtil(unittest.TestCase):
         self.session.destroyObject(self.pubKey)
         self.session.destroyObject(self.privKey)
 
-        self.session.logout()
-        self.session.close()
-        self.pkcs11.closeAllSessions(self.slot)
-        self.pkcs11.close()
-        del self.pkcs11
+        super().tearDown()
 
     def test_sign_integer(self):
         toSign = 1234567890
@@ -97,7 +58,7 @@ class TestUtil(unittest.TestCase):
         toSign = b"Hello world"
         mecha = api.Mechanism(api.CKM_RSA_X_509, None)
 
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("RSA X.509 only supported by SoftHSM >= 2")
 
         # sign/verify
@@ -116,7 +77,7 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(dataIn, decrypted)
 
     def test_encrypt_X509(self):
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("RSA X.509 only supported by SoftHSM >= 2")
 
         # encrypt/decrypt using CKM_RSA_X_509
@@ -136,7 +97,7 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(dataIn, decrypted)
 
     def test_RSA_OAEP(self):
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("RSA OAEP only supported by SoftHSM >= 2")
 
         # RSA OAEP
@@ -151,7 +112,7 @@ class TestUtil(unittest.TestCase):
     def test_RSA_OAEPwithAAD(self):
         # AAD is "Additional Authentication Data"
         # (pSourceData of CK_RSA_PKCS_OAEP_PARAMS struct)
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("RSA OAEP only supported by SoftHSM >= 2")
 
         if self.manufacturer.startswith("SoftHSM"):
@@ -171,7 +132,7 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(plainText, decrypted)
 
     def test_RSA_PSS_SHA1(self):
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("RSA PSS only supported by SoftHSM >= 2")
 
         # RSA PSS
@@ -189,7 +150,7 @@ class TestUtil(unittest.TestCase):
         self.assertTrue(result)
 
     def test_RSA_PSS_SHA256(self):
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("RSA PSS only supported by SoftHSM >= 2")
 
         # RSA PSS
@@ -210,3 +171,8 @@ class TestUtil(unittest.TestCase):
         # test CK_OBJECT_HANDLE.__repr__()
         text = str(self.pubKey)
         self.assertIsNotNone(text)
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

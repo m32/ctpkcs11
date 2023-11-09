@@ -1,23 +1,12 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM, HSMError
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+import sys
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
-    def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
-
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
-        self.session = self.pkcs11.openSession(
-            self.slot, api.CKF_SERIAL_SESSION | api.CKF_RW_SESSION
-        )
-
-    def tearDown(self):
-        self.session.close()
-        self.pkcs11.closeAllSessions(self.slot)
-        self.pkcs11.close()
-        del self.pkcs11
+class TestUtil(TestCase):
+    withlogin = False
 
     def test_initPin(self):
         # use admin pin
@@ -95,3 +84,9 @@ class TestUtil(unittest.TestCase):
         self.assertEqual(token_info.label, label)
 
         self.session.logout()
+
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

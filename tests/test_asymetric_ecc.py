@@ -1,25 +1,17 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM, HSMError
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
 from asn1crypto.keys import ECDomainParameters, NamedCurve
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
+class TestUtil(TestCase):
     def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
-
-        # get SoftHSM major version
-        self.SoftHSMversion = self.pkcs11.getInfo().libraryVersion[0]
-
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
-        self.session = self.pkcs11.openSession(
-            self.slot, api.CKF_SERIAL_SESSION | api.CKF_RW_SESSION
-        )
-        self.session.login("1234")
-
+        super().setUp()
+        if self.SoftHSMversion < (2, 0):
+            self.skipTest("ECDSA only supported by SoftHSM >= 2")
         # Select the curve to be used for the keys
-        curve = u"secp256r1"
+        curve = "secp256r1"
 
         # Setup the domain parameters, unicode conversion needed
         # for the curve string
@@ -54,8 +46,6 @@ class TestUtil(unittest.TestCase):
             (api.CKA_ID, keyID),
         ]
 
-        if self.SoftHSMversion < 2:
-            self.skipTest("ECDSA only supported by SoftHSM >= 2")
 
         (self.pubKey, self.privKey) = self.session.generateKeyPair(
             ec_public_tmpl, ec_priv_tmpl, mecha=api.MechanismECGENERATEKEYPAIR
@@ -71,11 +61,7 @@ class TestUtil(unittest.TestCase):
         self.session.destroyObject(self.pubKey)
         self.session.destroyObject(self.privKey)
 
-        self.session.logout()
-        self.session.close()
-        self.pkcs11.closeAllSessions(self.slot)
-        self.pkcs11.close()
-        del self.pkcs11
+        super().tearDown()
 
     def test_sign_integer(self):
         toSign = 1234567890
@@ -97,3 +83,8 @@ class TestUtil(unittest.TestCase):
         result = self.session.verify(self.pubKey, toSign, signature, mecha)
 
         self.assertTrue(result)
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

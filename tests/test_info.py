@@ -1,19 +1,15 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM, HSMError
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
+class TestUtil(TestCase):
+    withlogin = False
+
     def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
-
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
+        super().setUp()
         self.manufacturerIDs = ("SoftHSM", "SoftHSM project")
-
-    def tearDown(self):
-        self.pkcs11.close()
-        del self.pkcs11
 
     def test_getInfo(self):
         info = self.pkcs11.getInfo()
@@ -42,11 +38,11 @@ class TestUtil(unittest.TestCase):
         self.assertIsNotNone(text)
 
     def test_getSessionInfo(self):
-        self.session = self.pkcs11.openSession(self.slot, api.CKF_SERIAL_SESSION)
-        info = self.session.getSessionInfo()
+        session = self.pkcs11.openSession(self.slot, api.CKF_SERIAL_SESSION)
+        info = session.getSessionInfo()
         text = str(info)
         self.assertIsNotNone(text)
-        self.session.close()
+        session.close()
 
     def test_getMechanismList(self):
         mechanisms = self.pkcs11.getMechanismList(self.slot)
@@ -57,3 +53,9 @@ class TestUtil(unittest.TestCase):
         info = self.pkcs11.getMechanismInfo(self.slot, mechanisms[0])
         text = str(info)
         self.assertIsNotNone(text)
+
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

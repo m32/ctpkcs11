@@ -1,32 +1,12 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM, HSMError
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
-    def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
-
-        # get SoftHSM major version
-        self.SoftHSMversion = self.pkcs11.getInfo().libraryVersion[0]
-
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
-
-        self.session = self.pkcs11.openSession(
-            self.slot, api.CKF_SERIAL_SESSION | api.CKF_RW_SESSION
-        )
-        self.session.login("1234")
-
-    def tearDown(self):
-        self.session.logout()
-        self.session.close()
-        self.pkcs11.closeAllSessions(self.slot)
-        self.pkcs11.close()
-        del self.pkcs11
-
+class TestUtil(TestCase):
     def test_Objects(self):
-        if self.SoftHSMversion < 2:
+        if self.SoftHSMversion < (2, 0):
             self.skipTest("generateKey() only supported by SoftHSM >= 2")
 
         AESKeyTemplate = [
@@ -90,3 +70,9 @@ class TestUtil(unittest.TestCase):
 
         template = [(api.CKA_HW_FEATURE_TYPE, api.CKH_USER_INTERFACE)]
         o = self.session.findObjects(template)
+
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

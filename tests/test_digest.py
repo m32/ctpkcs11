@@ -1,6 +1,8 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM, HSMError
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+from tconfig import TestCase, api, HSMError
+
 
 # SHA1 of "abc"
 SHA1_abc = bytes(
@@ -29,19 +31,8 @@ SHA1_abc = bytes(
 )
 
 
-class TestUtil(unittest.TestCase):
-    def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
-
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
-        self.session = self.pkcs11.openSession(self.slot, api.CKF_SERIAL_SESSION)
-
-    def tearDown(self):
-        self.session.close()
-        self.pkcs11.closeAllSessions(self.slot)
-        self.pkcs11.close()
-        del self.pkcs11
+class TestUtil(TestCase):
+    withlogin = False
 
     def test_digest(self):
         digest = self.session.digest(b"abc")
@@ -52,3 +43,9 @@ class TestUtil(unittest.TestCase):
         digestSession.update(b"abc")
         digest = digestSession.final()
         self.assertSequenceEqual(digest, SHA1_abc)
+
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()

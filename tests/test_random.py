@@ -1,21 +1,11 @@
-import os
-import unittest
-from ctpkcs11 import api, HSM
+#!/usr/bin/env vpython3
+if __name__ == '__main__':
+    import run
+from tconfig import TestCase, api, HSMError
 
 
-class TestUtil(unittest.TestCase):
-    def setUp(self):
-        self.pkcs11 = HSM(os.environ["PKCS11_MODULE"])
-        self.pkcs11.open()
-
-        self.slot = self.pkcs11.getSlotList(tokenPresent=True)[0]
-        self.session = self.pkcs11.openSession(self.slot, api.CKF_SERIAL_SESSION)
-
-    def tearDown(self):
-        self.session.close()
-        self.pkcs11.closeAllSessions(self.slot)
-        self.pkcs11.close()
-        del self.pkcs11
+class TestUtil(TestCase):
+    withlogin = False
 
     def test_seedRandom(self):
         seed = bytes([1, 2, 3, 4])
@@ -27,3 +17,9 @@ class TestUtil(unittest.TestCase):
 
         rnd = self.session.generateRandom(32)
         self.assertEqual(len(rnd), 32)
+
+
+
+if __name__ == '__main__':
+    import unittest
+    unittest.main()
