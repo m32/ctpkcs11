@@ -10,7 +10,7 @@ class TestUtil(TestCase):
         super().setUp()
 
         # Select the curve to be used for the keys
-        curve = u"secp256r1"
+        curve = "secp256r1"
 
         # Setup the domain parameters, unicode conversion needed
         # for the curve string
