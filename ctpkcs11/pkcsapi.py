@@ -1840,9 +1840,9 @@ MechanismAESGENERATEKEY = Mechanism(CKM_AES_KEY_GEN)
 class RSAOAEPMechanism(Mechanism):
     def __init__(self, hashAlg, mgf, label=None):
         param = ck_rsa_pkcs_oaep_params(hashAlg, mgf, CKZ_DATA_SPECIFIED)
-        self.label = label
         if label:
-            param.source_data = byref(label)
+            self.label = buffer(label)
+            param.source_data = addressof(self.label)
             param.source_data_len = len(label)
         self._param = param
         super().__init__(CKM_RSA_PKCS_OAEP, addressof(param), sizeof(param))
