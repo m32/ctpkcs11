@@ -29,7 +29,7 @@ class TestCase(unittest.TestCase):
         print(why)
         super().skipTest(why)
 
-    def createRSAKey(self, keyID):
+    def createRSAKey(self, keyID, bits=0x0400):
         if self.SoftHSMversion < (2, 0):
             self.skipTest("generateKey() only supported by SoftHSM >= 2")
 
@@ -37,7 +37,7 @@ class TestCase(unittest.TestCase):
             (api.CKA_CLASS, api.CKO_PUBLIC_KEY),
             (api.CKA_TOKEN, api.CK_TRUE),
             (api.CKA_PRIVATE, api.CK_FALSE),
-            (api.CKA_MODULUS_BITS, 0x0400),
+            (api.CKA_MODULUS_BITS, bits),
             (api.CKA_PUBLIC_EXPONENT, (0x01, 0x00, 0x01)),
             (api.CKA_ENCRYPT, api.CK_TRUE),
             (api.CKA_VERIFY, api.CK_TRUE),
@@ -61,7 +61,7 @@ class TestCase(unittest.TestCase):
 
         return self.session.generateKeyPair(pubTemplate, privTemplate)
 
-    def createAESKey(self, keyID, extractable=False):
+    def createAESKey(self, keyID, bits=256, extractable=False):
         if self.SoftHSMversion < (2, 0):
             self.skipTest("generateKey() only supported by SoftHSM >= 2")
 
@@ -74,7 +74,7 @@ class TestCase(unittest.TestCase):
             (api.CKA_DECRYPT, api.CK_TRUE),
             (api.CKA_SIGN, api.CK_FALSE),
             (api.CKA_VERIFY, api.CK_FALSE),
-            (api.CKA_VALUE_LEN, 32),
+            (api.CKA_VALUE_LEN, bits // 8),
             (api.CKA_LABEL, "AES Key"),
             (api.CKA_ID, keyID),
             (api.CKA_EXTRACTABLE, api.CK_TRUE if extractable else api.CK_FALSE),
